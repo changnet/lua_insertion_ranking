@@ -40,6 +40,8 @@ max_size()
 local key = get_key( pos )
 local pos = get_position( key )
 
+save( file )
+load( file )
 ```
 Example & Benchmark
 -------
