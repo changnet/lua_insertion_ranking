@@ -76,6 +76,45 @@ void lir::del_string( const char *str )
 
 static int size( lua_State *L )
 {
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #2 expect" LIB_NAME );
+    }
+
+    lua_pushinteger( L,(*_lir)->size() );
+
+    return 1;
+}
+
+static int max_size( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #2 expect" LIB_NAME );
+    }
+
+    lua_pushinteger( L,(*_lir)->max_size() );
+
+    return 1;
+}
+
+static int resize( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #2 expect" LIB_NAME );
+    }
+
+    int sz = luaL_checkinteger( L,2 );
+    if ( sz < 0 )
+    {
+        return luaL_error( L, "resize to negetive size" );
+    }
+    lua_pushinteger( L,(*_lir)->resize( sz ) );
+
     return 1;
 }
 
@@ -169,6 +208,12 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, size);
     lua_setfield(L, -2, "size");
+
+    lua_pushcfunction(L, max_size);
+    lua_setfield(L, -2, "max_size");
+
+    lua_pushcfunction(L, resize);
+    lua_setfield(L, -2, "resize");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );

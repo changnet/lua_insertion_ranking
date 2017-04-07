@@ -21,6 +21,8 @@ Api
 
 ```lua
 
+exist( pid )
+
 set_factor()
 set_one_factor()
 
@@ -43,9 +45,10 @@ local pos = get_position( key )
 save( file )
 load( file )
 
-add_value()
-del_value()
+add_header()
+del_header()
 
+del( pid )
 ```
 Example & Benchmark
 -------

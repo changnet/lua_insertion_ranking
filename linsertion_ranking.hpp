@@ -22,6 +22,10 @@ public:
     explicit lir( const char *path,int max_size );
 
     int add_header( const char *name,size_t sz = 0 );
+
+    inline int size() { return _cur_size; }
+    inline int max_size() { return _max_size; }
+    inline int resize( int sz ){ return _max_size = sz; };
 private:
     void  del_string( const char *str );
     char *new_string( const char *str,size_t sz = 0 );
@@ -36,7 +40,7 @@ private:
 
     typedef enum
     {
-        LVT_NONE   ,
+        LVT_NIL    ,
         LVT_INTEGER,
         LVT_NUMBER ,
         LVT_STRING
