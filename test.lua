@@ -39,5 +39,7 @@ end
 
 local Lir = require "lua_insertion_ranking"
 
-print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
-    max,sy - sx,ey - ex))
+local lir = Lir( "test.lir",10,"name","age","rate" )
+
+-- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
+--     max,sy - sx,ey - ex))

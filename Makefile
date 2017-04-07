@@ -5,8 +5,8 @@ CXX = g++
 
 TARGET_SO =         lua_insertion_ranking.so
 TARGET_A  =         liblua_insertion_ranking.a
-#CFLAGS =            -g3 -Wall -pedantic -fno-inline
-CFLAGS =            -O2 -Wall -pedantic #-DNDEBUG
+CFLAGS =            -g3 -Wall -pedantic -fno-inline
+#CFLAGS =            -O2 -Wall -pedantic #-DNDEBUG
 
 SHAREDDIR = .sharedlib
 STATICDIR = .staticlib

@@ -1,8 +1,78 @@
 #include "linsertion_ranking.hpp"
 
 #include <cassert>
+#include <cstring>
 
 #define LIB_NAME "lua_insertion_ranking"
+
+
+#define array_resize(type,base,cur,size)            \
+    do{                                             \
+        type *tmp = new type[size];                 \
+        memset( tmp,0,sizeof(type)*size );          \
+        memcpy( tmp,base,sizeof(type)*cur );        \
+        delete []base;                              \
+        base = tmp;                                 \
+        cur = size;                                 \
+    }while(0)
+
+lir::~lir()
+{
+    for ( int i = 0;i < _max_header;i ++ )
+    {
+        if ( *(_header + i) ) del_string( *(_header + i) );
+    }
+
+    delete []_header;
+}
+
+lir::lir( const char *path,int max_size )
+{
+    // snprintf
+    size_t sz = strlen( path );
+    sz = sz > (MAX_PATH - 1) ? (MAX_PATH - 1) : sz;
+
+    memcpy( _path,path,sz );
+
+    _path[sz]  = 0;
+    _cur_size  = 0;
+    _max_size  = max_size;
+
+    _cur_header = 0;
+    _max_header = DEFAULT_HEADER;
+    _header     = new char*[DEFAULT_HEADER];
+
+    memset( _header,0,sizeof(char*)*_max_header );
+}
+
+int lir::add_header( const char *name,size_t sz )
+{
+    if ( _cur_header >= _max_header )
+    {
+        array_resize( char *,_header,_max_header,_max_header*2 );
+    }
+
+    *(_header + _cur_header) = new_string( name,sz );
+    _cur_header ++;
+
+    return _cur_header;
+}
+
+char *lir::new_string( const char *str,size_t sz )
+{
+    sz = 0 == sz ? strlen(str) : sz;
+
+    char *new_str = new char[sz + 1];
+
+    memcpy( new_str,str,sz );
+    *(new_str + sz) = '\0'  ;
+
+    return new_str;
+}
+void lir::del_string( const char *str )
+{
+    delete []str;
+}
 
 static int size( lua_State *L )
 {
@@ -14,7 +84,35 @@ static int size( lua_State *L )
 static int __call( lua_State *L )
 {
     /* lua调用__call,第一个参数是该元表所属的table.取构造函数参数要注意 */
-    class lir* obj = new class lir();
+    size_t sz = 0;
+    const char *path = luaL_checklstring( L,2,&sz );
+    if ( sz >= lir::MAX_PATH )
+    {
+        return luaL_error( L,"path(argument #1) too long" );
+    }
+
+    int max_size = luaL_checkinteger( L,3 );
+
+    class lir* obj = new class lir( path,max_size );
+
+    bool error = false;
+    int top = lua_gettop( L );
+    for ( int i = 4;i < top;i ++ )
+    {
+        if ( !lua_isstring( L,i ) )
+        {
+            error = true;
+            break       ;
+        }
+
+        obj->add_header( lua_tostring( L,i ) );
+    }
+
+    if ( error )
+    {
+        delete obj;
+        return luaL_error( L,"header must be string" );
+    }
 
     lua_settop( L,1 ); /* 清除所有构造函数参数,只保留元表 */
 

@@ -42,6 +42,10 @@ local pos = get_position( key )
 
 save( file )
 load( file )
+
+add_value()
+del_value()
+
 ```
 Example & Benchmark
 -------
