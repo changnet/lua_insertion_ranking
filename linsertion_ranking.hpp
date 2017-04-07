@@ -18,21 +18,8 @@ extern int luaopen_lua_insertion_ranking( lua_State *L );
 class lir
 {
 public:
-    ~lir();
-    explicit lir( const char *path,int max_size );
-
-    int add_header( const char *name,size_t sz = 0 );
-
-    inline int size() { return _cur_size; }
-    inline int max_size() { return _max_size; }
-    inline int resize( int sz ){ return _max_size = sz; };
-private:
-    void  del_string( const char *str );
-    char *new_string( const char *str,size_t sz = 0 );
-public:
     const static int MAX_FACTOR = 5;
     const static int MAX_PATH   = 64;
-private:
     const static int DEFAULT_HEADER = 8;
 
     typedef double factor_t  ;
@@ -66,8 +53,24 @@ private:
 
     typedef map< key_t,element_t > kmap_t;
     typedef map< key_t,element_t >::iterator kmap_iterator;
+public:
+    ~lir();
+    explicit lir( const char *path,int max_size );
+
+    int add_header( const char *name,size_t sz = 0 );
+    int update( key_t key,factor_t *factor,int factor_cnt );
+
+    inline int size() { return _cur_size; }
+    inline int max_size() { return _max_size; }
+    inline int resize( int sz ){ return _max_size = sz; };
+private:
+    void  del_string( const char *str );
+    char *new_string( const char *str,size_t sz = 0 );
+    int append( key_t key,factor_t *factor,int factor_cnt );
 private:
     char _path[MAX_PATH];
+
+    int _cur_factor;
 
     int _max_size;
     int _cur_size;

@@ -34,6 +34,8 @@ lir::lir( const char *path,int max_size )
 
     memcpy( _path,path,sz );
 
+    _cur_factor = 0;
+
     _path[sz]  = 0;
     _cur_size  = 0;
     _max_size  = max_size;
@@ -74,12 +76,50 @@ void lir::del_string( const char *str )
     delete []str;
 }
 
+int lir::update( key_t key,factor_t *factor,int factor_cnt )
+{
+    kmap_iterator itr = _kmap.find( key );
+
+    if ( itr == _kmap.end() ) return append( key,factor,factor_cnt );
+
+    return 0;
+}
+
+/* ====================LUA STATIC FUNCTION======================= */
+
+static int set_factor( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    lir::key_t key = luaL_checkinteger( L,2 );
+
+    lir::factor_t factor[lir::MAX_FACTOR] = { 0 };
+    
+    int factor_cnt = 0;
+    int top = lua_gettop( L );
+    for ( int i = 3;i < top;i ++ )
+    {
+        factor[factor_cnt++] = luaL_checknumber( L,i );
+    }
+
+    if ( factor_cnt <= 0 )
+    {
+        return luaL_error( L, "no ranking factor specify" );
+    }
+
+    return (*_lir)->update( key,factor,factor_cnt );
+}
+
 static int size( lua_State *L )
 {
     class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
     if ( _lir == NULL || *_lir == NULL )
     {
-        return luaL_error( L, "argument #2 expect" LIB_NAME );
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
     }
 
     lua_pushinteger( L,(*_lir)->size() );
@@ -92,7 +132,7 @@ static int max_size( lua_State *L )
     class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
     if ( _lir == NULL || *_lir == NULL )
     {
-        return luaL_error( L, "argument #2 expect" LIB_NAME );
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
     }
 
     lua_pushinteger( L,(*_lir)->max_size() );
@@ -105,7 +145,7 @@ static int resize( lua_State *L )
     class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
     if ( _lir == NULL || *_lir == NULL )
     {
-        return luaL_error( L, "argument #2 expect" LIB_NAME );
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
     }
 
     int sz = luaL_checkinteger( L,2 );
@@ -214,6 +254,9 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, resize);
     lua_setfield(L, -2, "resize");
+
+    lua_pushcfunction(L, set_factor);
+    lua_setfield(L, -2, "set_factor");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );

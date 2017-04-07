@@ -21,7 +21,7 @@ Api
 
 ```lua
 
-exist( pid )
+exist( pid ) -- 用get_position替代
 
 set_factor()
 set_one_factor()
