@@ -501,7 +501,7 @@ static int set_one_value( lua_State *L )
 
     lir::key_t key   = luaL_checkinteger( L,2 );
     const char *name = luaL_checkstring( L,3 ) ;
-    lir::lval_t lval = lua_toelement( L,3 )    ;
+    lir::lval_t lval = lua_toelement( L,4 )    ;
     if ( lir::LVT_NIL == lval._vt )
     {
         return luaL_error( L,
