@@ -4,6 +4,9 @@ lua insertion ranking
 
  a ranking module in game development with insertion sort algorithm.
 
+ 此库会保存所有曾经进入排行榜的数据。但仅对max_size个元素进行排序，其他排行均为0。
+ 主要是防止最后一名不断上榜、落榜时需要不断创建、销毁对象。
+
 
 Installation
 ------------

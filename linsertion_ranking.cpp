@@ -34,6 +34,7 @@ lir::lir( const char *path,int max_size )
 
     memcpy( _path,path,sz );
 
+    _modify = false;
     _cur_factor = 0;
 
     _path[sz]  = 0;
@@ -76,17 +77,86 @@ void lir::del_string( const char *str )
     delete []str;
 }
 
-int lir::update( key_t key,factor_t *factor,int factor_cnt )
+/* 对比排序因子
+ * @fsrc @fdest 是一个大小为MAX_FACTOR的数组
+ */
+int lir::compare( factor_t *fsrc,factor_t *fdest )
 {
-    kmap_iterator itr = _kmap.find( key );
+    assert( _cur_factor > 0 );
 
-    if ( itr == _kmap.end() ) return append( key,factor,factor_cnt );
+    for ( int i = 0;i < _cur_factor;i ++ )
+    {
+        if ( fsrc[i] > fdest[i] )
+        {
+            return 1;
+        }
+        else if ( fsrc[i] < fdest[i] )
+        {
+            return -1;
+        }
+    }
 
     return 0;
 }
 
-/* ====================LUA STATIC FUNCTION======================= */
+/* 向前移动元素 */
+int lir::shift_up( const element_t *element )
+{
+    return 0;
+}
 
+/* 向后移动元素 */
+int lir::shift_down( const element_t *element )
+{
+    return 0;
+}
+
+/* 添加新元素到排行 */
+int lir::append( key_t key,factor_t *factor,int factor_cnt )
+{
+    if ( _cur_size >= _max_size )
+    {
+        array_resize( element_t*,_list,_max_size,_max_size*2 );
+    }
+
+    element_t *element = new element_t();
+    element->_pos = 0;
+    element->_key = key ;
+    element->_val = NULL;
+    
+    /* factor必须按MAX_FACTOR初始化。必须全部拷贝，以初始化element._factor */
+    memcpy( element->_factor,factor,sizeof( element->_factor ) );
+
+    _cur_size++;
+    _kmap[key]           = element;
+    *(_list + _cur_size) = element;
+
+    element->_pos = _cur_size;
+
+    return shift_up( element );
+}
+
+/* 更新排序因子，不存在则尝试插入 */
+int lir::update( key_t key,factor_t *factor,int factor_cnt )
+{
+    // 自动更新全局最大排序因子(必须在compare、memcpy之前更新)
+    if ( factor_cnt > _cur_factor ) _cur_factor = factor_cnt;
+
+    kmap_iterator itr = _kmap.find( key );
+    if ( itr == _kmap.end() ) return append( key,factor,factor_cnt );
+
+    element_t *element = itr->second;
+    int shift = compare( element->_factor,factor );
+
+    /* factor必须按MAX_FACTOR初始化。必须全部拷贝，以初始化element._factor */
+    memcpy( element->_factor,factor,sizeof( element->_factor ) );
+    return shift > 0 ? shift_up( itr->second ) : shift_down( itr->second );
+}
+
+/* ====================LUA STATIC FUNCTION======================= */
+/* 设置玩家的排序因子
+ * self:set_factor( key_id,factor1,factor2,... )
+ */
 static int set_factor( lua_State *L )
 {
     class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
@@ -101,11 +171,21 @@ static int set_factor( lua_State *L )
     
     int factor_cnt = 0;
     int top = lua_gettop( L );
+
+    /* 可以一次性传入多个factor，但不能超过MAX_FACTOR */
+    if ( top - 2 > lir::MAX_FACTOR )
+    {
+        return luaL_error( L, 
+            "too many ranking factor,%d at most",lir::MAX_FACTOR );
+    }
+
+    // factor只能是number(integer)类型
     for ( int i = 3;i < top;i ++ )
     {
         factor[factor_cnt++] = luaL_checknumber( L,i );
     }
 
+    // 至少需要传入一个factor，其他可以默认为0
     if ( factor_cnt <= 0 )
     {
         return luaL_error( L, "no ranking factor specify" );
@@ -127,36 +207,6 @@ static int size( lua_State *L )
     return 1;
 }
 
-static int max_size( lua_State *L )
-{
-    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
-    if ( _lir == NULL || *_lir == NULL )
-    {
-        return luaL_error( L, "argument #1 expect" LIB_NAME );
-    }
-
-    lua_pushinteger( L,(*_lir)->max_size() );
-
-    return 1;
-}
-
-static int resize( lua_State *L )
-{
-    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
-    if ( _lir == NULL || *_lir == NULL )
-    {
-        return luaL_error( L, "argument #1 expect" LIB_NAME );
-    }
-
-    int sz = luaL_checkinteger( L,2 );
-    if ( sz < 0 )
-    {
-        return luaL_error( L, "resize to negetive size" );
-    }
-    lua_pushinteger( L,(*_lir)->resize( sz ) );
-
-    return 1;
-}
 
 
 /* create a C++ object and push to lua stack */
@@ -165,7 +215,7 @@ static int __call( lua_State *L )
     /* lua调用__call,第一个参数是该元表所属的table.取构造函数参数要注意 */
     size_t sz = 0;
     const char *path = luaL_checklstring( L,2,&sz );
-    if ( sz >= lir::MAX_PATH )
+    if ( sz >= (size_t)lir::MAX_PATH )
     {
         return luaL_error( L,"path(argument #1) too long" );
     }
@@ -249,11 +299,11 @@ int luaopen_lua_insertion_ranking( lua_State *L )
     lua_pushcfunction(L, size);
     lua_setfield(L, -2, "size");
 
-    lua_pushcfunction(L, max_size);
-    lua_setfield(L, -2, "max_size");
+    // lua_pushcfunction(L, max_size);
+    // lua_setfield(L, -2, "max_size");
 
-    lua_pushcfunction(L, resize);
-    lua_setfield(L, -2, "resize");
+    // lua_pushcfunction(L, resize);
+    // lua_setfield(L, -2, "resize");
 
     lua_pushcfunction(L, set_factor);
     lua_setfield(L, -2, "set_factor");
