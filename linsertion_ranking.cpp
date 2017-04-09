@@ -24,22 +24,31 @@ lir::~lir()
     }
 
     delete []_header;
+
+    for ( int i = 0;i < _cur_size;i ++ )
+    {
+        del_element( *(_list + i) );
+    }
+
+    delete []_list;
 }
 
-lir::lir( const char *path,int max_size )
+lir::lir( const char *path )
 {
     // snprintf
     size_t sz = strlen( path );
     sz = sz > (MAX_PATH - 1) ? (MAX_PATH - 1) : sz;
 
+    _path[sz]  = 0;
     memcpy( _path,path,sz );
+
+    _cur_size  = 0;
+    _max_size  = DEFAULT_HEADER;
+    _list = new element_t*[DEFAULT_HEADER];
+    memset( _list,0,sizeof(element_t*)*_max_size );
 
     _modify = false;
     _cur_factor = 0;
-
-    _path[sz]  = 0;
-    _cur_size  = 0;
-    _max_size  = max_size;
 
     _cur_header = 0;
     _max_header = DEFAULT_HEADER;
@@ -72,15 +81,35 @@ char *lir::new_string( const char *str,size_t sz )
 
     return new_str;
 }
+
 void lir::del_string( const char *str )
 {
     delete []str;
 }
 
+void lir::del_element( const element_t *element )
+{
+    if ( element->_val )
+    {
+        for ( int i = 0;i < _cur_header;i ++ )
+        {
+            const lval_t &lval = *(element->_val + i);
+            if ( lval._vt == LVT_STRING )
+            {
+                del_string( lval._v._str );
+            }
+        }
+
+        delete []element->_val;
+    }
+
+    delete element;
+}
+
 /* 对比排序因子
  * @fsrc @fdest 是一个大小为MAX_FACTOR的数组
  */
-int lir::compare( factor_t *fsrc,factor_t *fdest )
+int lir::compare( const factor_t *fsrc,const factor_t *fdest )
 {
     assert( _cur_factor > 0 );
 
@@ -100,15 +129,49 @@ int lir::compare( factor_t *fsrc,factor_t *fdest )
 }
 
 /* 向前移动元素 */
-int lir::shift_up( const element_t *element )
+int lir::shift_up( element_t *element )
 {
-    return 0;
+    /* _pos是排名，从1开始
+     * element->_pos - 2是取排在element前一个元素索引(从0开始)
+     */
+    for ( int index = element->_pos - 2;index > 0;index -- )
+    {
+        element_t *element_up = *(_list + index);
+
+        if ( compare( element,element_up ) <= 0 ) break;
+
+        // 交换位置
+        element->_pos --;
+        element_up->_pos ++;
+        *(_list + index + 1) = element_up;
+    }
+
+    assert( element->_pos > 0 && element->_pos <= _cur_size );
+
+    *(_list + element->_pos - 1) = element;
+    return element->_pos;
 }
 
 /* 向后移动元素 */
-int lir::shift_down( const element_t *element )
+int lir::shift_down( element_t *element )
 {
-    return 0;
+    for ( int index = element->_pos;index <= _cur_size - 1;index ++ )
+    {
+        element_t *element_down = *(_list + index);
+
+        if ( compare( element,element_down ) >= 0 ) break;
+
+        // 交换
+        element->_pos ++;
+        element_down->_pos --;
+
+        *(_list + index - 1) = element_down;
+    }
+
+    assert( element->_pos > 0 && element->_pos <= _cur_size );
+
+    *(_list + element->_pos - 1) = element;
+    return element->_pos;
 }
 
 /* 添加新元素到排行 */
@@ -220,13 +283,11 @@ static int __call( lua_State *L )
         return luaL_error( L,"path(argument #1) too long" );
     }
 
-    int max_size = luaL_checkinteger( L,3 );
-
-    class lir* obj = new class lir( path,max_size );
+    class lir* obj = new class lir( path );
 
     bool error = false;
     int top = lua_gettop( L );
-    for ( int i = 4;i < top;i ++ )
+    for ( int i = 3;i < top;i ++ )
     {
         if ( !lua_isstring( L,i ) )
         {

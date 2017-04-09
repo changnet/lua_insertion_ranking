@@ -21,6 +21,8 @@ public:
     const static int MAX_FACTOR = 5;  // 最大排序因子数量
     const static int MAX_PATH   = 64; // 保存文件名路径长度
 
+    const static int DEFAULT_SIZE = 32; // 默认分配排行数组大小
+
     // 默认变量名头部分配大小
     // 比如排行榜中包含玩家的名字，那一列叫"name"，那这个name就称头部
     const static int DEFAULT_HEADER = 8;
@@ -62,7 +64,7 @@ public:
     typedef map< key_t,element_t *>::iterator kmap_iterator;
 public:
     ~lir();
-    explicit lir( const char *path,int max_size );
+    explicit lir( const char *path );
 
     // 增加一个变量头部
     int add_header( const char *name,size_t sz = 0 );
@@ -75,12 +77,18 @@ private:
     void  del_string( const char *str );
     char *new_string( const char *str,size_t sz = 0 );
 
-    int shift_up  ( const element_t *element );
-    int shift_down( const element_t *element );
+    void del_element( const element_t *element );
+
+    int shift_up  ( element_t *element );
+    int shift_down( element_t *element );
     int append( key_t key,factor_t *factor,int factor_cnt );
 
     // 对比排序因子
-    int compare( factor_t *fsrc,factor_t *fdest );
+    int compare( const factor_t *fsrc,const factor_t *fdest );
+    int compare( const element_t *esrc,const element_t *edest )
+    {
+        return compare( esrc->_factor,edest->_factor );
+    }
 private:
     bool _modify; // 是否变更
     char _path[MAX_PATH];  // 保存的文件路径

@@ -39,7 +39,11 @@ end
 
 local Lir = require "lua_insertion_ranking"
 
-local lir = Lir( "test.lir",10,"name","age","rate" )
+local lir = Lir( "test.lir","name","age","rate" )
+
+for key_id = 1,10 do
+    lir:set_factor( key_id,8963,2235 );
+end
 
 -- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
 --     max,sy - sx,ey - ex))
