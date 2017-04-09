@@ -10,6 +10,7 @@
 #endif
 
 #include <iostream>     // std::streambuf, std::cout
+#include <cstring>
 
 #include <lua.hpp>
 extern "C"
@@ -80,10 +81,13 @@ public:
 
     // 当前排行的数量，最大数量，设置最大数量
     inline int size() { return _cur_size; }
-private:
-    void  del_string( const char *str );
-    char *new_string( const char *str,size_t sz = 0 );
 
+    // 设置一个变量
+    int update_one_value( key_t key,const char *name,lval_t &lval );
+
+    static void  del_string( const char *str );
+    static char *new_string( const char *str,size_t sz = 0 );
+private:
     void del_element( const element_t *element );
 
     int shift_up  ( element_t *element );
@@ -98,6 +102,17 @@ private:
     }
 
     void raw_dump( std::ostream &os );
+
+    /* 查找对应value的索引 */
+    int find_value( const char *name )
+    {
+        for ( int i = 0;i < _cur_header;i ++ )
+        {
+            if ( 0 == strcmp( name,*(_header + i) ) ) return i;
+        }
+
+        return -1;
+    }
 private:
     bool _modify; // 是否变更
     char _path[MAX_PATH];  // 保存的文件路径

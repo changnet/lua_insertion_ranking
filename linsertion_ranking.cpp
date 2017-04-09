@@ -1,12 +1,10 @@
 #include "linsertion_ranking.hpp"
 
 #include <cassert>
-#include <cstring>
 
 #include <fstream>      // std::ofstream
 
 #define LIB_NAME "lua_insertion_ranking"
-
 
 #define array_resize(type,base,cur,size)            \
     do{                                             \
@@ -17,6 +15,62 @@
         base = tmp;                                 \
         cur = size;                                 \
     }while(0)
+
+
+static const char* error_msg[] = 
+{
+    "success",
+    "no such key found",
+    "no such name found"
+};
+
+static void raise_error( lua_State *L,int err_code )
+{
+    if ( err_code > 0 && (size_t)err_code < sizeof(error_msg)/sizeof(char*) )
+    {
+        luaL_error( L,error_msg[err_code] );
+        return;
+    }
+
+    luaL_error( L,"unknow error(%d)",err_code );
+}
+
+/* 将一个lua变量转换为一个lval_t变量 */
+static lir::lval_t lua_toelement( lua_State *L,int index )
+{
+    lir::lval_t lval;
+
+    switch ( lua_type( L,index ) )
+    {
+        case LUA_TNUMBER :
+        {
+            if ( lua_isinteger( L,index ) )
+            {
+                lval._vt = lir::LVT_INTEGER;
+                lval._v._int = lua_tointeger( L,index );
+            }
+            else
+            {
+                lval._vt = lir::LVT_NUMBER;
+                lval._v._num = lua_tonumber( L,index );
+            }
+        }break;
+        case LUA_TSTRING :
+        {
+                lval._vt = lir::LVT_STRING;
+
+                size_t sz = 0;
+                const char *str = lua_tolstring( L,index,&sz );
+                lval._v._str = lir::new_string( str,sz );
+        }break;
+        default:
+        {
+            lval._vt = lir::LVT_NIL;
+        }break;
+    }
+
+    return lval;
+}
 
 lir::~lir()
 {
@@ -136,7 +190,7 @@ int lir::shift_up( element_t *element )
     /* _pos是排名，从1开始
      * element->_pos - 2是取排在element前一个元素索引(从0开始)
      */
-    for ( int index = element->_pos - 2;index > 0;index -- )
+    for ( int index = element->_pos - 2;index >= 0;index -- )
     {
         element_t *element_up = *(_list + index);
 
@@ -185,7 +239,6 @@ int lir::append( key_t key,factor_t *factor )
     }
 
     element_t *element = new element_t();
-    element->_pos = 0;
     element->_key = key ;
     element->_val = NULL;
     
@@ -255,6 +308,7 @@ int lir::update_one_factor( key_t key,factor_t factor,int index,int &old_pos )
     return shift > 0 ? shift_up( element ) : shift_down( element );
 }
 
+/* 打印整个排行榜数据 */
 void lir::raw_dump( std::ostream &os )
 {
     for ( int index = 0;index < _cur_size;index ++ )
@@ -290,6 +344,7 @@ void lir::raw_dump( std::ostream &os )
     }
 }
 
+/* 打印到std::cout还是文件 */
 void lir::dump( const char *path )
 {
     if ( path )
@@ -305,6 +360,30 @@ void lir::dump( const char *path )
     }
 
     raw_dump( std::cout );
+}
+
+/* 设置一个变量 */
+int lir::update_one_value( key_t key,const char *name,lval_t &lval )
+{
+    kmap_iterator itr = _kmap.find( key );
+    if ( itr == _kmap.end() )
+    {
+        return 1;
+    }
+
+    int index = find_value( name );
+    if ( index < 0 )      return 2;
+
+    element_t *element = itr->second;
+    if ( !element->_val )
+    {
+        element->_val = new lval_t[_cur_header];
+        memset( element->_val,0,sizeof(char*)*_cur_header );
+    }
+
+    *(element->_val + index) = lval;
+
+    return 0;
 }
 
 /* ====================LUA STATIC FUNCTION======================= */
@@ -411,7 +490,32 @@ static int size( lua_State *L )
     return 1;
 }
 
+/* 获取当前排行榜数量 */
+static int set_one_value( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
 
+    lir::key_t key   = luaL_checkinteger( L,2 );
+    const char *name = luaL_checkstring( L,3 ) ;
+    lir::lval_t lval = lua_toelement( L,3 )    ;
+    if ( lir::LVT_NIL == lval._vt )
+    {
+        return luaL_error( L,
+            "unsouport value type %s",lua_typename(L, lua_type(L, 3)) );
+    }
+
+    int err = (*_lir)->update_one_value( key,name,lval );
+    if ( err )
+    {
+        raise_error( L,err );
+    }
+
+    return 0;
+}
 
 /* create a C++ object and push to lua stack */
 static int __call( lua_State *L )
@@ -509,6 +613,9 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, set_factor);
     lua_setfield(L, -2, "set_factor");
+
+    lua_pushcfunction(L, set_one_value);
+    lua_setfield(L, -2, "set_one_value");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );
