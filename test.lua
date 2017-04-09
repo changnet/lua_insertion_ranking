@@ -45,5 +45,6 @@ for key_id = 1,10 do
     lir:set_factor( key_id,8963,2235 );
 end
 
+lir:dump()
 -- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
 --     max,sy - sx,ey - ex))

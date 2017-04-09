@@ -52,6 +52,8 @@ add_header()
 del_header()
 
 del( pid )
+
+dump( file )
 ```
 Example & Benchmark
 -------

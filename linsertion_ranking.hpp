@@ -9,6 +9,8 @@
     #define map    std::unordered_map
 #endif
 
+#include <iostream>     // std::streambuf, std::cout
+
 #include <lua.hpp>
 extern "C"
 {
@@ -66,10 +68,15 @@ public:
     ~lir();
     explicit lir( const char *path );
 
+    // 打印排行榜到std::cout或者文件
+    void dump( const char *path );
+
     // 增加一个变量头部
     int add_header( const char *name,size_t sz = 0 );
     // 更新排序因子，不存在则尝试插入
-    int update( key_t key,factor_t *factor,int factor_cnt );
+    int update_factor( key_t key,factor_t *factor,int factor_cnt,int &old_pos );
+    // 更新单个排序因子
+    int update_one_factor( key_t key,factor_t factor,int index,int &old_pos );
 
     // 当前排行的数量，最大数量，设置最大数量
     inline int size() { return _cur_size; }
@@ -81,7 +88,7 @@ private:
 
     int shift_up  ( element_t *element );
     int shift_down( element_t *element );
-    int append( key_t key,factor_t *factor,int factor_cnt );
+    int append( key_t key,factor_t *factor );
 
     // 对比排序因子
     int compare( const factor_t *fsrc,const factor_t *fdest );
@@ -89,6 +96,8 @@ private:
     {
         return compare( esrc->_factor,edest->_factor );
     }
+
+    void raw_dump( std::ostream &os );
 private:
     bool _modify; // 是否变更
     char _path[MAX_PATH];  // 保存的文件路径

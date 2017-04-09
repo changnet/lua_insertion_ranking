@@ -3,6 +3,8 @@
 #include <cassert>
 #include <cstring>
 
+#include <fstream>      // std::ofstream
+
 #define LIB_NAME "lua_insertion_ranking"
 
 
@@ -175,7 +177,7 @@ int lir::shift_down( element_t *element )
 }
 
 /* 添加新元素到排行 */
-int lir::append( key_t key,factor_t *factor,int factor_cnt )
+int lir::append( key_t key,factor_t *factor )
 {
     if ( _cur_size >= _max_size )
     {
@@ -200,20 +202,109 @@ int lir::append( key_t key,factor_t *factor,int factor_cnt )
 }
 
 /* 更新排序因子，不存在则尝试插入 */
-int lir::update( key_t key,factor_t *factor,int factor_cnt )
+int lir::update_factor( key_t key,factor_t *factor,int factor_cnt,int &old_pos )
 {
     // 自动更新全局最大排序因子(必须在compare、memcpy之前更新)
     if ( factor_cnt > _cur_factor ) _cur_factor = factor_cnt;
 
     kmap_iterator itr = _kmap.find( key );
-    if ( itr == _kmap.end() ) return append( key,factor,factor_cnt );
+    if ( itr == _kmap.end() )
+    {
+        old_pos = 0;
+        return append( key,factor );
+    }
 
     element_t *element = itr->second;
+
+    old_pos = element->_pos;
     int shift = compare( element->_factor,factor );
+
+    if ( 0 == shift ) return old_pos; // no change
 
     /* factor必须按MAX_FACTOR初始化。必须全部拷贝，以初始化element._factor */
     memcpy( element->_factor,factor,sizeof( element->_factor ) );
-    return shift > 0 ? shift_up( itr->second ) : shift_down( itr->second );
+    return shift > 0 ? shift_up( element ) : shift_down( element );
+}
+
+/* 更新单个排序因子，不存在则尝试插入 */
+int lir::update_one_factor( key_t key,factor_t factor,int index,int &old_pos )
+{
+    // 自动更新全局最大排序因子(必须在compare、memcpy之前更新)
+    if ( index > _cur_factor ) _cur_factor = index;
+
+    index --; // C++ 从0开始，lua从1开始
+    kmap_iterator itr = _kmap.find( key );
+    if ( itr == _kmap.end() )
+    {
+        factor_t flist[MAX_FACTOR] = { 0 };
+        flist[index] = factor;
+        return append( key,flist );
+    }
+
+    element_t *element = itr->second;
+
+    old_pos = element->_pos;
+    if ( element->_factor[index] == factor )
+    {
+        return old_pos;
+    }
+
+    int shift = element->_factor[index] > factor ? 1 : -1;
+
+    element->_factor[index] = factor;
+    return shift > 0 ? shift_up( element ) : shift_down( element );
+}
+
+void lir::raw_dump( std::ostream &os )
+{
+    for ( int index = 0;index < _cur_size;index ++ )
+    {
+        const element_t *e = *(_list + index);
+
+        // print position and key
+        os << index + 1 << '\t' << e->_key;
+
+        // print all factor
+        for ( int findex = 0;findex < _cur_factor;findex ++ )
+        {
+            os << '\t' << e->_factor[findex];
+        }
+
+        // print all value
+        if ( e->_val )
+        {
+            for ( int hindex = 0;hindex < _cur_header;hindex ++ )
+            {
+                const lval_t &lval = e->_val[hindex];
+                switch ( lval._vt )
+                {
+                    case LVT_NIL : os << '\t' << "nil";break;
+                    case LVT_INTEGER : os << '\t' << lval._v._int;break;
+                    case LVT_NUMBER  : os << '\t' << lval._v._num;break;
+                    case LVT_STRING  : os << '\t' << lval._v._str;break;
+                }
+            }
+        }
+
+        os << std::endl;
+    }
+}
+
+void lir::dump( const char *path )
+{
+    if ( path )
+    {
+        std::ofstream ofs( path,std::ofstream::app );
+        if ( ofs.good() )
+        {
+            raw_dump( ofs );
+            ofs.close    ();
+
+            return;
+        }
+    }
+
+    raw_dump( std::cout );
 }
 
 /* ====================LUA STATIC FUNCTION======================= */
@@ -243,7 +334,7 @@ static int set_factor( lua_State *L )
     }
 
     // factor只能是number(integer)类型
-    for ( int i = 3;i < top;i ++ )
+    for ( int i = 3;i <= top;i ++ )
     {
         factor[factor_cnt++] = luaL_checknumber( L,i );
     }
@@ -254,9 +345,59 @@ static int set_factor( lua_State *L )
         return luaL_error( L, "no ranking factor specify" );
     }
 
-    return (*_lir)->update( key,factor,factor_cnt );
+    int old_pos = 0;
+    int new_pos = (*_lir)->update_factor( key,factor,factor_cnt,old_pos );
+
+    lua_pushinteger( L,new_pos );
+    lua_pushinteger( L,old_pos );
+    return 2;
 }
 
+/* 设置玩家单个排序因子
+ * self:set_factor( key_id,factor1,factor2,... )
+ */
+static int set_one_factor( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    lir::key_t key = luaL_checkinteger( L,2 );
+    lir::factor_t factor = luaL_checknumber( L,3 );
+    int index = luaL_checkinteger( L,4 );
+
+    if ( index > lir::MAX_FACTOR )
+    {
+        return luaL_error( L, 
+            "too many ranking factor,%d at most",lir::MAX_FACTOR );
+    }
+
+    int old_pos = 0;
+    int new_pos = (*_lir)->update_one_factor( key,factor,index,old_pos );
+
+    lua_pushinteger( L,new_pos );
+    lua_pushinteger( L,old_pos );
+    return 2;
+}
+
+/* 打印整个排行榜 */
+static int dump( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    const char *path = luaL_optstring( L,2,NULL );
+
+    (*_lir)->dump( path );
+    return 0;
+}
+
+/* 获取当前排行榜数量 */
 static int size( lua_State *L )
 {
     class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
@@ -360,11 +501,11 @@ int luaopen_lua_insertion_ranking( lua_State *L )
     lua_pushcfunction(L, size);
     lua_setfield(L, -2, "size");
 
-    // lua_pushcfunction(L, max_size);
-    // lua_setfield(L, -2, "max_size");
+    lua_pushcfunction(L, dump);
+    lua_setfield(L, -2, "dump");
 
-    // lua_pushcfunction(L, resize);
-    // lua_setfield(L, -2, "resize");
+    lua_pushcfunction(L, set_one_factor);
+    lua_setfield(L, -2, "set_one_factor");
 
     lua_pushcfunction(L, set_factor);
     lua_setfield(L, -2, "set_factor");
