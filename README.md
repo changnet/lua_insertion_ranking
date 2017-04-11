@@ -27,6 +27,7 @@ Api
 -- create a rank object
 -- make sure file_path is valid.it won't create any directory.
 -- header name must be string
+-- it never check if header names are duplicates
 local Lir = require "lua_insertion_ranking"
 local lir = Lir( "file_path","header1","header2","header3",... )
 
@@ -63,8 +64,13 @@ local pos = lir:get_position( uinque_key )
 save( file )
 load( file )
 
-add_header()
-del_header()
+-- add a header name
+-- it never check if header names are duplicates
+-- this function may trigger a memory reallocate,it's cost maybe very high.
+lir:add_header( "headerN" )
+
+-- del a header name
+lir:del_header( "headerN" )
 
 -- delete a element from rank
 -- if no such key in rank,return 0

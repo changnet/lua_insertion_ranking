@@ -142,6 +142,7 @@ lir::lir( const char *path )
 
 int lir::add_header( const char *name,size_t sz )
 {
+    int old_size = _max_header;
     if ( _cur_header >= _max_header )
     {
         array_resize( char *,_header,_max_header,_max_header*2 );
@@ -149,6 +150,23 @@ int lir::add_header( const char *name,size_t sz )
 
     *(_header + _cur_header) = new_string( name,sz );
     _cur_header ++;
+
+    // 如果预留的内存不足，重新分配所有元素的内存
+    if ( old_size != _max_header && _cur_size > 0 )
+    {
+        for ( int index = 0;index < _cur_size;index ++ )
+        {
+            element_t *element = *(_list + index);
+            if ( !element->_val )        continue;
+
+            const lval_t*old_val = element->_val;
+            element->_val= new lval_t[_max_header];
+            memset( element->_val,0,sizeof(lval_t)*_max_header ); // 预留
+            memcpy( element->_val,old_val,sizeof(lval_t)*_cur_header );
+
+            delete []old_val;
+        }
+    }
 
     return _cur_header;
 }
@@ -423,8 +441,8 @@ int lir::update_one_value( key_t key,int index,lval_t &lval )
     element_t *element = itr->second;
     if ( !element->_val )
     {
-        element->_val = new lval_t[_cur_header];
-        memset( element->_val,0,sizeof(lval_t)*_cur_header );
+        element->_val = new lval_t[_max_header];
+        memset( element->_val,0,sizeof(lval_t)*_max_header ); // 预留
     }
 
     *(element->_val + index) = lval;
@@ -787,6 +805,27 @@ static int del( lua_State *L )
     return                 1;
 }
 
+/* 增加一个header */
+static int add_header( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    size_t sz = 0;
+    const char *name = luaL_checklstring( L,2,&sz );
+    if ( sz <= 0 )
+    {
+        luaL_error( L,"illegal header name" );
+    }
+
+    (*_lir)->add_header( name );
+
+    return 0;
+}
+
 /* create a C++ object and push to lua stack */
 static int __call( lua_State *L )
 {
@@ -907,6 +946,9 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, del);
     lua_setfield(L, -2, "del");
+
+    lua_pushcfunction(L, add_header);
+    lua_setfield(L, -2, "add_header");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );
