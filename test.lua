@@ -52,14 +52,17 @@ for key_id = 1,10 do
     lir:set_factor( key_id,factor1,factor2 );
 end
 
+lir:set_value( 7,"test7",30,0.856 )
 lir:set_one_factor( 8,9632.778,5 )
 lir:set_one_value( 5,"name","lir5" )
 lir:set_one_factor( 1,-8659.669,1 )
 
 lir:dump()
 print( lir:get_factor( 7 ) )
-print( lir:get_one_factor( 7,2 ) )
+print( lir:get_one_factor( 1,1 ) )
+print( lir:get_value( 5 ) )
 
+print( lir:size() )
 -- lir:dump( "test.lir" )
 -- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
 --     max,sy - sx,ey - ex))

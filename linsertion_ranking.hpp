@@ -36,7 +36,7 @@ public:
     // lua中传入的值类型
     typedef enum
     {
-        LVT_NIL    ,
+        LVT_NIL = 0, // nil类型必须为0，因为我们用memeset来初始化一个element_t
         LVT_INTEGER,
         LVT_NUMBER ,
         LVT_STRING
@@ -83,10 +83,14 @@ public:
     inline int size() { return _cur_size; }
 
     // 设置一个变量
+    int update_one_value( key_t key,int index,lval_t &lval );
     int update_one_value( key_t key,const char *name,lval_t &lval );
 
     // 获取排序因子
     int get_factor( key_t key,factor_t **factor );
+
+    // 获取变量
+    int get_value( key_t key,lval_t **val );
 
     static void  del_string( const char *str );
     static char *new_string( const char *str,size_t sz = 0 );

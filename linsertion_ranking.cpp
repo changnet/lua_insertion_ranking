@@ -22,7 +22,8 @@ static const char* error_msg[] =
 {
     "success",
     "no such key found",
-    "no such name found"
+    "no such value name found",
+    "value index illegal"
 };
 
 static void raise_error( lua_State *L,int err_code )
@@ -73,10 +74,22 @@ static lir::lval_t lua_toelement( lua_State *L,int index )
     return lval;
 }
 
+/* push a element to lua stack */
+static void lua_pushelement( lua_State *L,const lir::lval_t &val )
+{
+    switch( val._vt )
+    {
+        case lir::LVT_INTEGER : lua_pushinteger( L,val._v._int ); break;
+        case lir::LVT_NUMBER  : lua_pushnumber ( L,val._v._num ); break;
+        case lir::LVT_STRING  : lua_pushstring ( L,val._v._str ); break;
+        default: lua_pushnil( L );
+    }
+}
+
 /* push a number as integer if possible,otherwise push a number */
 static void lua_pushintegerornumber( lua_State *L,double v )
 {
-    if ( std::floor(v) == v )
+    if ( v == (LUA_INTEGER)v ) // std::floor(v) == v
     {
         lua_pushinteger( L,v );
     }
@@ -358,7 +371,7 @@ void lir::raw_dump( std::ostream &os )
                 const lval_t &lval = e->_val[hindex];
                 switch ( lval._vt )
                 {
-                    case LVT_NIL : os << '\t' << "nil";break;
+                    case LVT_NIL     : os << '\t' << "nil";break;
                     case LVT_INTEGER : os << '\t' << lval._v._int;break;
                     case LVT_NUMBER  : os << '\t' << lval._v._num;break;
                     case LVT_STRING  : os << '\t' << lval._v._str;break;
@@ -391,20 +404,27 @@ void lir::dump( const char *path )
 /* 设置一个变量 */
 int lir::update_one_value( key_t key,const char *name,lval_t &lval )
 {
+    int index = find_value( name );
+    if ( index < 0 )      return 2;
+
+    return update_one_value( key,index,lval );
+}
+
+int lir::update_one_value( key_t key,int index,lval_t &lval )
+{
     kmap_iterator itr = _kmap.find( key );
     if ( itr == _kmap.end() )
     {
         return 1;
     }
 
-    int index = find_value( name );
-    if ( index < 0 )      return 2;
+    if ( index < 0 || index >= _cur_header ) return 3;
 
     element_t *element = itr->second;
     if ( !element->_val )
     {
         element->_val = new lval_t[_cur_header];
-        memset( element->_val,0,sizeof(char*)*_cur_header );
+        memset( element->_val,0,sizeof(lval_t)*_cur_header );
     }
 
     *(element->_val + index) = lval;
@@ -421,6 +441,17 @@ int lir::get_factor( key_t key,factor_t **factor )
     *factor = itr->second->_factor;
 
     return _cur_factor;
+}
+
+// 获取变量
+int lir::get_value( key_t key,lval_t **val )
+{
+    kmap_iterator itr = _kmap.find( key );
+    if ( itr == _kmap.end() ) return    0;
+
+    *val = itr->second->_val;
+
+    return _cur_header;
 }
 
 /* ====================LUA STATIC FUNCTION======================= */
@@ -527,7 +558,36 @@ static int size( lua_State *L )
     return 1;
 }
 
-/* 获取当前排行榜数量 */
+/* 设置变量值 */
+static int set_value( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    lir::key_t key   = luaL_checkinteger( L,2 );
+    
+    int top = lua_gettop( L );
+    for ( int i = 3;i <= top;i ++ )
+    {
+        lir::lval_t lval = lua_toelement( L,i );
+        if ( lir::LVT_NIL == lval._vt )
+        {
+            return luaL_error( L,
+                "unsouport value type %s",lua_typename(L, lua_type(L, i)) );
+        }
+
+        int err = (*_lir)->update_one_value( key,i - 3,lval );
+
+        if ( err ) raise_error( L,err );
+    }
+
+    return 0;
+}
+
+/* 设置单个变量值 */
 static int set_one_value( lua_State *L )
 {
     class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
@@ -605,6 +665,29 @@ static int get_one_factor( lua_State *L )
     return 1;
 }
 
+/* 获取排序因子 */
+static int get_value( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    lir::key_t key   = luaL_checkinteger( L,2 );
+
+    lir::lval_t *val = NULL;
+    int val_cnt = (*_lir)->get_value( key,&val );
+    assert( val_cnt >= 0 );
+
+    for ( int i = 0;i < val_cnt;i ++ )
+    {
+        lua_pushelement( L,*(val + i) );
+    }
+
+    return val_cnt;
+}
+
 /* create a C++ object and push to lua stack */
 static int __call( lua_State *L )
 {
@@ -620,7 +703,7 @@ static int __call( lua_State *L )
 
     bool error = false;
     int top = lua_gettop( L );
-    for ( int i = 3;i < top;i ++ )
+    for ( int i = 3;i <= top;i ++ )
     {
         if ( !lua_isstring( L,i ) )
         {
@@ -702,6 +785,9 @@ int luaopen_lua_insertion_ranking( lua_State *L )
     lua_pushcfunction(L, set_factor);
     lua_setfield(L, -2, "set_factor");
 
+    lua_pushcfunction(L, set_value);
+    lua_setfield(L, -2, "set_value");
+
     lua_pushcfunction(L, set_one_value);
     lua_setfield(L, -2, "set_one_value");
 
@@ -710,6 +796,9 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, get_one_factor);
     lua_setfield(L, -2, "get_one_factor");
+
+    lua_pushcfunction(L, get_value);
+    lua_setfield(L, -2, "get_value");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );
