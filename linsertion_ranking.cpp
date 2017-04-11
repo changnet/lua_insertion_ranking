@@ -556,6 +556,62 @@ int lir::del( const key_t &key )
     return pos;
 }
 
+// 保存到文件
+int lir::save()
+{
+    std::ofstream ofs( _path,std::ofstream::trunc );
+    if ( !ofs.good() ) return -1;
+
+    // 为了方便修改，以text保存而不是bianry
+    // text模式下，需要处理特殊字符
+
+    /* 第一行是排行榜信息，行以\n标识
+     * 第一个数字是排序因子数量
+     * 往后分别是header名
+     * 以tab分隔
+     */
+    ofs << _cur_factor;
+    for ( int i = 0;i < _cur_header;i ++ )
+    {
+        ofs << '\t';
+        write_string( ofs,*(_header + i) );
+    }
+    ofs << "\n";
+
+    // 第二行开始，每一行是一个元素
+    // 各个值分别是key、排序因子factor、变量，以tab分隔
+    for ( int i = 0;i < _cur_size;i ++ )
+    {
+        const element_t *element = *(_list + i);
+
+        ofs << element->_key;
+        for ( int findex = 0;findex < _cur_factor;findex ++ )
+        {
+            ofs << '\t' << element->_factor[findex];
+        }
+
+        if ( element->_val )
+        {
+            for ( int vindex = 0;vindex < _cur_header;vindex ++ )
+            {
+                ofs << '\t';
+                const lval_t &lval = element->_val[vindex];
+                switch ( lval._vt )
+                {
+                    case LVT_NIL     : break;
+                    case LVT_INTEGER : ofs << lval._v._int; break;
+                    case LVT_NUMBER  : ofs << lval._v._num; break;
+                    case LVT_STRING  : write_string( ofs,lval._v._str ); break;
+                }
+            }
+        }
+        ofs << "\n";
+    }
+
+    ofs.close();
+    return    0;
+}
+
 /* ====================LUA STATIC FUNCTION======================= */
 /* 设置玩家的排序因子
  * self:set_factor( key_id,factor1,factor2,... )
@@ -893,6 +949,23 @@ static int del_header( lua_State *L )
     return 0;
 }
 
+/* 保存到文件 */
+static int save( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    if ( 0 != (*_lir)->save() )
+    {
+        return luaL_error( L,strerror(errno) );
+    }
+
+    return 0;
+}
+
 /* create a C++ object and push to lua stack */
 static int __call( lua_State *L )
 {
@@ -1025,6 +1098,9 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, del_header);
     lua_setfield(L, -2, "del_header");
+
+    lua_pushcfunction(L, save);
+    lua_setfield(L, -2, "save");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );

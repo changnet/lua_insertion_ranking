@@ -57,6 +57,8 @@ lir:set_one_factor( 8,9632.778,5 )
 lir:set_one_value( 5,"name","lir5" )
 lir:set_one_factor( 1,-8659.669,1 )
 
+lir:save( "test.lir" )
+
 lir:del( 9 )
 lir:add_header( "job" )
 
@@ -77,6 +79,6 @@ lir:del_header( "name" )
 lir:del_header( "job" )
 lir:del_header( "rate" )
 lir:dump()
--- lir:dump( "test.lir" )
+
 -- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
 --      max,sy - sx,ey - ex))

@@ -104,6 +104,9 @@ public:
     // 删除一个元素
     int del( const key_t &key );
 
+    // 保存到文件
+    int save();
+
     static void  del_string( const char *str );
     static char *new_string( const char *str,size_t sz = 0 );
 private:
@@ -132,6 +135,12 @@ private:
         }
 
         return -1;
+    }
+
+    // 以text模式写入字符串
+    std::ostream & write_string( std::ostream &os,const char *str )
+    {
+        return os << strlen(str) << ":" << str;
     }
 private:
     bool _modify; // 是否变更
