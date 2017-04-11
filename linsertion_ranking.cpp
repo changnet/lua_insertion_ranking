@@ -1,5 +1,6 @@
 #include "linsertion_ranking.hpp"
 
+#include <cmath>
 #include <cassert>
 
 #include <fstream>      // std::ofstream
@@ -70,6 +71,19 @@ static lir::lval_t lua_toelement( lua_State *L,int index )
     }
 
     return lval;
+}
+
+/* push a number as integer if possible,otherwise push a number */
+static void lua_pushintegerornumber( lua_State *L,double v )
+{
+    if ( std::floor(v) == v )
+    {
+        lua_pushinteger( L,v );
+    }
+    else
+    {
+        lua_pushnumber( L,v );
+    }
 }
 
 lir::~lir()
@@ -302,7 +316,7 @@ int lir::update_one_factor( key_t key,factor_t factor,int index,int &old_pos )
         return old_pos;
     }
 
-    int shift = element->_factor[index] > factor ? 1 : -1;
+    int shift = factor > element->_factor[index] ? 1 : -1;
 
     element->_factor[index] = factor;
     return shift > 0 ? shift_up( element ) : shift_down( element );
@@ -311,6 +325,18 @@ int lir::update_one_factor( key_t key,factor_t factor,int index,int &old_pos )
 /* 打印整个排行榜数据 */
 void lir::raw_dump( std::ostream &os )
 {
+    // print header
+    os << "position";
+    for ( int i = 0;i < _cur_factor;i ++ )
+    {
+        os << '\t' << "factor" << i;
+    }
+    for ( int i = 0;i < _cur_header;i ++ )
+    {
+        os << '\t' << *(_header + i);
+    }
+    os << std::endl;
+
     for ( int index = 0;index < _cur_size;index ++ )
     {
         const element_t *e = *(_list + index);
@@ -384,6 +410,17 @@ int lir::update_one_value( key_t key,const char *name,lval_t &lval )
     *(element->_val + index) = lval;
 
     return 0;
+}
+
+// 获取排序因子
+int lir::get_factor( key_t key,factor_t **factor )
+{
+    kmap_iterator itr = _kmap.find( key );
+    if ( itr == _kmap.end() ) return    0;
+
+    *factor = itr->second->_factor;
+
+    return _cur_factor;
 }
 
 /* ====================LUA STATIC FUNCTION======================= */
@@ -517,6 +554,57 @@ static int set_one_value( lua_State *L )
     return 0;
 }
 
+/* 获取排序因子 */
+static int get_factor( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    lir::key_t key   = luaL_checkinteger( L,2 );
+
+    lir::factor_t *factor = NULL;
+    int factor_cnt = (*_lir)->get_factor( key,&factor );
+    assert( factor_cnt >= 0 && factor_cnt <= lir::MAX_FACTOR );
+
+    for ( int i = 0;i < factor_cnt;i ++ )
+    {
+        lua_pushintegerornumber( L,*(factor + i) );
+    }
+
+    return factor_cnt;
+}
+
+/* 获取单个排序因子 */
+static int get_one_factor( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    lir::key_t key = luaL_checkinteger( L,2 );
+    int index      = luaL_checkinteger( L,3 );
+
+    if ( index <= 0 || index > lir::MAX_FACTOR )
+    {
+        return luaL_error( L, "argument #2 illegal" );
+    }
+
+    lir::factor_t *factor = NULL;
+    int factor_cnt = (*_lir)->get_factor( key,&factor );
+    assert( factor_cnt >= 0 && factor_cnt <= lir::MAX_FACTOR );
+
+    if ( index > factor_cnt ) return 0;
+
+    lua_pushintegerornumber( L,*(factor + index - 1) );
+
+    return 1;
+}
+
 /* create a C++ object and push to lua stack */
 static int __call( lua_State *L )
 {
@@ -616,6 +704,12 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, set_one_value);
     lua_setfield(L, -2, "set_one_value");
+
+    lua_pushcfunction(L, get_factor);
+    lua_setfield(L, -2, "get_factor");
+
+    lua_pushcfunction(L, get_one_factor);
+    lua_setfield(L, -2, "get_one_factor");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );

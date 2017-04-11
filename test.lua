@@ -38,22 +38,28 @@ function vd(data, max_level)
 end
 
 local MIN_RAND = 0
-local MAX_RAND = 200
+local MAX_RAND = 2000
 math.randomseed( os.time() )
 
 local Lir = require "lua_insertion_ranking"
 
 local lir = Lir( "test.lir","name","age","rate" )
+lir:dump()
 
 for key_id = 1,10 do
-    local factor1 = math.random( MIN_RAND,MAX_RAND )
-    local factor2 = math.random( MIN_RAND,MAX_RAND )
+    local factor1 = math.random( MIN_RAND,MAX_RAND ) * 0.2356
+    local factor2 = math.random( MIN_RAND,MAX_RAND ) * 0.9846
     lir:set_factor( key_id,factor1,factor2 );
 end
 
+lir:set_one_factor( 8,9632.778,5 )
 lir:set_one_value( 5,"name","lir5" )
+lir:set_one_factor( 1,-8659.669,1 )
 
 lir:dump()
+print( lir:get_factor( 7 ) )
+print( lir:get_one_factor( 7,2 ) )
+
 -- lir:dump( "test.lir" )
 -- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
 --     max,sy - sx,ey - ex))

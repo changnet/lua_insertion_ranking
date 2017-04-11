@@ -85,6 +85,9 @@ public:
     // 设置一个变量
     int update_one_value( key_t key,const char *name,lval_t &lval );
 
+    // 获取排序因子
+    int get_factor( key_t key,factor_t **factor );
+
     static void  del_string( const char *str );
     static char *new_string( const char *str,size_t sz = 0 );
 private:
