@@ -98,6 +98,9 @@ public:
     // 根据排行获取key
     key_t *get_key( int pos );
 
+    // 删除一个元素
+    int del( const key_t &key );
+
     static void  del_string( const char *str );
     static char *new_string( const char *str,size_t sz = 0 );
 private:

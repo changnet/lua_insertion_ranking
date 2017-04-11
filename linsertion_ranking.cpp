@@ -471,6 +471,32 @@ int lir::get_position( const key_t &key )
     return itr->second->_pos;
 }
 
+// 删除一个元素
+int lir::del( const key_t &key )
+{
+    kmap_iterator itr = _kmap.find( key );
+    if ( itr == _kmap.end() )
+    {
+        return 0;
+    }
+
+    // 当前元素后的都往前移动一个位置
+    int pos = itr->second->_pos;
+    for ( int index = pos;index < _cur_size;index ++ )
+    {
+        (*(_list + index))->_pos --;
+        *(_list + index - 1) = *(_list + index);
+    }
+
+    *(_list + _cur_size - 1) = NULL;
+
+    --_cur_size;
+    del_element( itr->second );
+    _kmap.erase( itr         );
+
+    return pos;
+}
+
 /* ====================LUA STATIC FUNCTION======================= */
 /* 设置玩家的排序因子
  * self:set_factor( key_id,factor1,factor2,... )
@@ -744,6 +770,23 @@ static int get_key( lua_State *L )
     return                  1;
 }
 
+/* 删除一个元素 */
+static int del( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    lir::key_t key = luaL_checkinteger( L,2 );
+
+    int pos = (*_lir)->del( key );
+
+    lua_pushinteger( L,pos );
+    return                 1;
+}
+
 /* create a C++ object and push to lua stack */
 static int __call( lua_State *L )
 {
@@ -861,6 +904,9 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, get_position);
     lua_setfield(L, -2, "get_position");
+
+    lua_pushcfunction(L, del);
+    lua_setfield(L, -2, "del");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );

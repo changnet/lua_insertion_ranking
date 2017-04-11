@@ -24,24 +24,41 @@ Api
 
 ```lua
 
-exist( pid ) -- 用get_position替代
+-- create a rank object
+-- make sure file_path is valid.it won't create any directory.
+-- header name must be string
+local Lir = require "lua_insertion_ranking"
+local lir = Lir( "file_path","header1","header2","header3",... )
 
-set_factor()
-set_one_factor()
+-- set rank factor.factor must number(integer).5 max factor support.
+-- if unique_key not exist in rank,it create a new element(the old_pos is 0)
+local new_pos,old_pos = lir:set_factor( unique_key,factor1,factor2,factor3,... )
+local new_pos,old_pos = lir:set_one_factor( unique_key,factor,indexN )
 
-get_factor()
-get_one_factor()
+-- get rank factor
+local factor1,factor2,factor3,... = lir:get_factor( unique_key )
+local factorN = lir:get_one_factor( unique_key,indexN )
 
-set_value()
-set_one_value()
+-- set header value,name is header name,like "header1"
+-- value can only be nil,number,string
+-- if no such unique_key in rank,raise a error
+lir:set_value( unique_key,value1,value2,value3,... )
+lir:set_one_value( unique_key,name,value )
 
-get_value()
-get_one_value()
+-- get header value,name is header name,like "header1"
+local value1,value2,value3,... = lir:get_value( unique_key )
+local value = lir:get_one_value( unique_key,name )
 
-size()
+-- total element count
+local sz = lir:size()
 
-local key = get_key( pos )
-local pos = get_position( key )
+-- get unique key by rank position
+-- if no such element in pos,return 0
+local key = lir:get_key( pos )
+
+-- get rank position by unique_key
+-- if no such key in rank,return nil
+local pos = lir:get_position( uinque_key )
 
 save( file )
 load( file )
@@ -49,9 +66,16 @@ load( file )
 add_header()
 del_header()
 
-del( pid )
+-- delete a element from rank
+-- if no such key in rank,return 0
+local old_pos = lir:del( unique_key )
 
-dump( file )
+-- is there any change in rank
+local modify = lir:modify()
+
+-- dump current rank to std::cout(a file if file path is valid)
+-- debug purpose only
+lir:dump( file )
 ```
 Example & Benchmark
 -------

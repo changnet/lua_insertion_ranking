@@ -57,6 +57,7 @@ lir:set_one_factor( 8,9632.778,5 )
 lir:set_one_value( 5,"name","lir5" )
 lir:set_one_factor( 1,-8659.669,1 )
 
+lir:del( 9 )
 lir:dump()
 print( lir:get_factor( 7 ) )
 print( lir:get_one_factor( 1,1 ) )
