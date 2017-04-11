@@ -63,6 +63,10 @@ print( lir:get_one_factor( 1,1 ) )
 print( lir:get_value( 5 ) )
 
 print( lir:size() )
+print( lir:get_key(9) )
+print( lir:get_key(100) )
+print( lir:get_position( 10 ) )
+print( lir:get_position( 99 ) )
 -- lir:dump( "test.lir" )
 -- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
 --     max,sy - sx,ey - ex))

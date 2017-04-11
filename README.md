@@ -39,8 +39,6 @@ get_value()
 get_one_value()
 
 size()
-resize()
-max_size()
 
 local key = get_key( pos )
 local pos = get_position( key )

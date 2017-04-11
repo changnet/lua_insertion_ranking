@@ -454,6 +454,23 @@ int lir::get_value( key_t key,lval_t **val )
     return _cur_header;
 }
 
+// 获取变量
+lir::key_t *lir::get_key( int pos )
+{
+    if ( pos < 0 || pos >= _cur_size ) return NULL;
+
+    return &((*(_list + pos))->_key);
+}
+
+// 根据key获取所在排名
+int lir::get_position( const key_t &key )
+{
+    kmap_iterator itr = _kmap.find( key );
+    if ( itr == _kmap.end() ) return    0;
+
+    return itr->second->_pos;
+}
+
 /* ====================LUA STATIC FUNCTION======================= */
 /* 设置玩家的排序因子
  * self:set_factor( key_id,factor1,factor2,... )
@@ -688,6 +705,45 @@ static int get_value( lua_State *L )
     return val_cnt;
 }
 
+/* 根据排名获取唯一key */
+static int get_position( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    lir::key_t key = luaL_checkinteger( L,2 );
+
+    lua_pushinteger( L,(*_lir)->get_position( key ) );
+
+    return 1;
+}
+
+/* 根据唯一key获取排名 */
+static int get_key( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    int pos = lua_tointeger( L,2 );
+    if ( pos <= 0 )
+    {
+        return luaL_error( L,"illegal rank position" );
+    }
+
+    lir::key_t *key = (*_lir)->get_key( pos - 1 );
+
+    if ( !key ) return 0;
+
+    lua_pushinteger( L,*key );
+    return                  1;
+}
+
 /* create a C++ object and push to lua stack */
 static int __call( lua_State *L )
 {
@@ -799,6 +855,12 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, get_value);
     lua_setfield(L, -2, "get_value");
+
+    lua_pushcfunction(L, get_key);
+    lua_setfield(L, -2, "get_key");
+
+    lua_pushcfunction(L, get_position);
+    lua_setfield(L, -2, "get_position");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );

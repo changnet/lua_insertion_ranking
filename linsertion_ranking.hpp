@@ -92,6 +92,12 @@ public:
     // 获取变量
     int get_value( key_t key,lval_t **val );
 
+    // 根据key获取所在排名
+    int get_position( const key_t &key );
+
+    // 根据排行获取key
+    key_t *get_key( int pos );
+
     static void  del_string( const char *str );
     static char *new_string( const char *str,size_t sz = 0 );
 private:
