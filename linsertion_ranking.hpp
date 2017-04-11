@@ -72,6 +72,9 @@ public:
     // 打印排行榜到std::cout或者文件
     void dump( const char *path );
 
+    // 删除一个变量头部
+    int del_header( const char *name );
+
     // 增加一个变量头部
     int add_header( const char *name,size_t sz = 0 );
     // 更新排序因子，不存在则尝试插入
@@ -104,6 +107,7 @@ public:
     static void  del_string( const char *str );
     static char *new_string( const char *str,size_t sz = 0 );
 private:
+    void del_lval( const lval_t &lval );
     void del_element( const element_t *element );
 
     int shift_up  ( element_t *element );
@@ -119,8 +123,8 @@ private:
 
     void raw_dump( std::ostream &os );
 
-    /* 查找对应value的索引 */
-    int find_value( const char *name )
+    /* 查找对应header的索引 */
+    int find_header( const char *name )
     {
         for ( int i = 0;i < _cur_header;i ++ )
         {

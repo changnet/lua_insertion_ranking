@@ -60,6 +60,8 @@ lir:set_one_factor( 1,-8659.669,1 )
 lir:del( 9 )
 lir:add_header( "job" )
 
+lir:del_header( "age" )
+
 lir:dump()
 print( lir:get_factor( 7 ) )
 print( lir:get_one_factor( 1,1 ) )
@@ -70,6 +72,11 @@ print( lir:get_key(9) )
 print( lir:get_key(100) )
 print( lir:get_position( 10 ) )
 print( lir:get_position( 99 ) )
+
+lir:del_header( "name" )
+lir:del_header( "job" )
+lir:del_header( "rate" )
+lir:dump()
 -- lir:dump( "test.lir" )
 -- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
---     max,sy - sx,ey - ex))
+--      max,sy - sx,ey - ex))

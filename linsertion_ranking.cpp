@@ -23,7 +23,9 @@ static const char* error_msg[] =
     "success",
     "no such key found",
     "no such value name found",
-    "value index illegal"
+    "value index illegal",
+    "no such header",
+    "dumplicate header name"
 };
 
 static void raise_error( lua_State *L,int err_code )
@@ -101,7 +103,7 @@ static void lua_pushintegerornumber( lua_State *L,double v )
 
 lir::~lir()
 {
-    for ( int i = 0;i < _max_header;i ++ )
+    for ( int i = 0;i < _cur_header;i ++ )
     {
         if ( *(_header + i) ) del_string( *(_header + i) );
     }
@@ -142,6 +144,9 @@ lir::lir( const char *path )
 
 int lir::add_header( const char *name,size_t sz )
 {
+    /* check dumplicate header name */
+    if ( find_header( name ) > 0 ) return 5;
+
     int old_size = _max_header;
     if ( _cur_header >= _max_header )
     {
@@ -168,7 +173,39 @@ int lir::add_header( const char *name,size_t sz )
         }
     }
 
-    return _cur_header;
+    return 0;
+}
+
+int lir::del_header( const char *name )
+{
+    int index = find_header( name );
+    if ( index < 0 ) return       4;
+
+    _cur_header --;
+    int mov_sz = _cur_header - index;
+
+    // 移动所有元素val数组，保证header
+    for ( int i = 0;i < _cur_size;i ++ )
+    {
+        element_t *element = *(_list + i);
+        if ( !element->_val )    continue;
+
+        del_lval( *(element->_val + index) );
+
+        if ( mov_sz > 0 )
+        {
+            memmove( element->_val + index,
+                element->_val + index + 1,sizeof(lval_t)*mov_sz );
+        }
+    }
+
+    del_string( *(_header + index) );
+    if ( mov_sz > 0 )
+    {
+        memmove( _header + index,_header + index + 1,sizeof(char*)*mov_sz );
+    }
+
+    return 0;
 }
 
 char *lir::new_string( const char *str,size_t sz )
@@ -188,17 +225,21 @@ void lir::del_string( const char *str )
     delete []str;
 }
 
+void lir::del_lval( const lval_t &lval )
+{
+    if ( lval._vt == LVT_STRING )
+    {
+        del_string( lval._v._str );
+    }
+}
+
 void lir::del_element( const element_t *element )
 {
     if ( element->_val )
     {
         for ( int i = 0;i < _cur_header;i ++ )
         {
-            const lval_t &lval = *(element->_val + i);
-            if ( lval._vt == LVT_STRING )
-            {
-                del_string( lval._v._str );
-            }
+            del_lval( *(element->_val + i) );
         }
 
         delete []element->_val;
@@ -422,7 +463,7 @@ void lir::dump( const char *path )
 /* 设置一个变量 */
 int lir::update_one_value( key_t key,const char *name,lval_t &lval )
 {
-    int index = find_value( name );
+    int index = find_header( name );
     if ( index < 0 )      return 2;
 
     return update_one_value( key,index,lval );
@@ -818,10 +859,36 @@ static int add_header( lua_State *L )
     const char *name = luaL_checklstring( L,2,&sz );
     if ( sz <= 0 )
     {
-        luaL_error( L,"illegal header name" );
+        return luaL_error( L,"illegal header name" );
     }
 
-    (*_lir)->add_header( name );
+    int err = (*_lir)->add_header( name,sz );
+    if ( err )
+    {
+        raise_error( L,err );
+        return             0;
+    }
+
+    return 0;
+}
+
+/* 删除一个header */
+static int del_header( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    const char *name = luaL_checkstring( L,2 );
+
+    int err = (*_lir)->del_header( name );
+    if ( err )
+    {
+        raise_error( L,err );
+        return             0;
+    }
 
     return 0;
 }
@@ -849,7 +916,13 @@ static int __call( lua_State *L )
             break       ;
         }
 
-        obj->add_header( lua_tostring( L,i ) );
+        int err = obj->add_header( lua_tostring( L,i ) );
+        if ( err )
+        {
+            delete obj;
+            raise_error( L,err );
+            return             0;
+        }
     }
 
     if ( error )
@@ -949,6 +1022,9 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, add_header);
     lua_setfield(L, -2, "add_header");
+
+    lua_pushcfunction(L, del_header);
+    lua_setfield(L, -2, "del_header");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );
