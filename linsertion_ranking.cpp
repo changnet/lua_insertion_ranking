@@ -486,6 +486,7 @@ int lir::update_one_value( key_t key,int index,lval_t &lval )
         memset( element->_val,0,sizeof(lval_t)*_max_header ); // 预留
     }
 
+    assert( false ); // 如果是string，新旧内存未处理。
     *(element->_val + index) = lval;
 
     return 0;
@@ -610,6 +611,28 @@ int lir::save()
 
     ofs.close();
     return    0;
+}
+
+int lir::load()
+{
+    std::ifstream ifs( _path,std::ifstream::in );
+    if ( !ifs.good() ) return -1;
+
+    static const int buff_max = 128;
+
+    int step = 1;
+    char buffer[buff_max];
+    switch ( step )
+    {
+        while ( ifs.good() )
+        {
+    case 1 : 
+    {
+        ifs.get( buffer,buff_max,'\t' );break;
+    }
+        }
+    }
+    return 0;
 }
 
 /* ====================LUA STATIC FUNCTION======================= */
@@ -966,6 +989,23 @@ static int save( lua_State *L )
     return 0;
 }
 
+/* 保存到文件 */
+static int load( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    if ( 0 != (*_lir)->load() )
+    {
+        return luaL_error( L,strerror(errno) );
+    }
+
+    return 0;
+}
+
 /* create a C++ object and push to lua stack */
 static int __call( lua_State *L )
 {
@@ -1101,6 +1141,9 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, save);
     lua_setfield(L, -2, "save");
+
+    lua_pushcfunction(L, load);
+    lua_setfield(L, -2, "load");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );

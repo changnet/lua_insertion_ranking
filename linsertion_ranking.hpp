@@ -107,6 +107,9 @@ public:
     // 保存到文件
     int save();
 
+    // 从文件加载数据
+    int load();
+
     static void  del_string( const char *str );
     static char *new_string( const char *str,size_t sz = 0 );
 private:

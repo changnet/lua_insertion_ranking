@@ -61,8 +61,17 @@ local key = lir:get_key( pos )
 -- if no such key in rank,return nil
 local pos = lir:get_position( uinque_key )
 
-save( file )
-load( file )
+-- save data to file in text mode
+-- path is the file_path when you create object lir
+lir:save()
+
+-- load data from file
+-- this function don't need a lir object,it will return one if success
+-- the arguments are the same as Lir constructor
+-- if the file(in file_path) not exist,it create a new lir object and return it
+-- if the file(in file_path) exist.it load data from it.if load success,return
+--      a new lir object,othewise raise a error
+lir = Lir:load( file_path,"head1","head2","head3",... )
 
 -- add a header name
 -- it never check if header names are duplicates
