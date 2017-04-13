@@ -616,7 +616,10 @@ int lir::load()
     int cur_size   = 0;
     int cur_header = 0;
 
+    key_t key;
     char buffer[max];
+    element_t element = NULL;
+    factor_t factor[MAX_FACTOR];
 
     while( ifs.good() && 0 == err )
     {
