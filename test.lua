@@ -79,6 +79,6 @@ lir:dump()
 -- lir:del_header( "job" )
 -- lir:del_header( "rate" )
 -- lir:dump()
-lir:load()
+-- lir:load()
 -- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
 --      max,sy - sx,ey - ex))

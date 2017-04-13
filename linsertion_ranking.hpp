@@ -140,10 +140,26 @@ private:
         return -1;
     }
 
-    // 以text模式写入字符串
-    std::ostream & write_string( std::ostream &os,const char *str )
+    // 写入字符串(长度加字符串内容)
+    std::ostream &write_string( std::ostream &os,const char *str )
     {
-        return os << strlen(str) << ":" << str;
+        size_t sz = strlen( str );
+        os.write( (char*)&sz,sizeof(sz) );
+
+        os.write( str,sz );
+        return          os;
+    }
+    // 读取字符串
+    size_t read_string( std::istream &is,char *buffer,int max )
+    {
+        size_t sz = 0;
+        is.read( (char*)&sz,sizeof(sz) );
+
+        if ( !is.good() || sz < 0 || sz > max - 1 ) return -1;
+
+        is.read( buffer,sz );
+        buffer[sz] = '\0';
+        return is.gcount() == sz ? sz : -1;
     }
 private:
     bool _modify; // 是否变更

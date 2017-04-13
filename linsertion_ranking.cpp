@@ -486,8 +486,8 @@ int lir::update_one_value( key_t key,int index,lval_t &lval )
         memset( element->_val,0,sizeof(lval_t)*_max_header ); // 预留
     }
 
-    assert( false ); // 如果是string，新旧内存未处理。
-    *(element->_val + index) = lval;
+    del_lval( *(element->_val + index) );// delete old value memory
+    *(element->_val + index)      = lval;
 
     return 0;
 }
@@ -560,53 +560,46 @@ int lir::del( const key_t &key )
 // 保存到文件
 int lir::save()
 {
-    std::ofstream ofs( _path,std::ofstream::trunc );
+    std::ofstream ofs( _path,std::ofstream::trunc | std::ofstream::binary );
     if ( !ofs.good() ) return -1;
 
-    // 为了方便修改，以text保存而不是bianry
-    // text模式下，需要处理特殊字符
 
-    /* 第一行是排行榜信息，行以\n标识
-     * 第一个数字是排序因子数量
-     * 往后分别是header名
-     * 以tab分隔
-     */
-    ofs << _cur_factor;
+    ofs.write( (char*)&_cur_factor,sizeof(_cur_factor) );
+    ofs.write( (char*)&_cur_header,sizeof(_cur_header) );
     for ( int i = 0;i < _cur_header;i ++ )
     {
-        ofs << '\t';
         write_string( ofs,*(_header + i) );
     }
-    ofs << "\n";
 
-    // 第二行开始，每一行是一个元素
-    // 各个值分别是key、排序因子factor、变量，以tab分隔
+    ofs.write( (char*)&_cur_size,sizeof(_cur_size) );
     for ( int i = 0;i < _cur_size;i ++ )
     {
         const element_t *element = *(_list + i);
 
-        ofs << element->_key;
+        ofs.write( (char*)&(element->_key),sizeof(element->_key) );
         for ( int findex = 0;findex < _cur_factor;findex ++ )
         {
-            ofs << '\t' << element->_factor[findex];
+            ofs.write( (char*)&(element->_factor[findex]),sizeof(factor_t) );
         }
 
-        if ( element->_val )
+        int cur_header = NULL == element->_val ? 0 : _cur_header;
+        ofs.write( (char*)&cur_header,sizeof(cur_header) );
+
+        for ( int vindex = 0;vindex < cur_header;vindex ++ )
         {
-            for ( int vindex = 0;vindex < _cur_header;vindex ++ )
+            const lval_t &lval = element->_val[vindex];
+
+            ofs.write( (char*)&lval._vt,sizeof(lval._vt) );
+            switch ( lval._vt )
             {
-                ofs << '\t';
-                const lval_t &lval = element->_val[vindex];
-                switch ( lval._vt )
-                {
-                    case LVT_NIL     : break;
-                    case LVT_INTEGER : ofs << lval._v._int; break;
-                    case LVT_NUMBER  : ofs << lval._v._num; break;
-                    case LVT_STRING  : write_string( ofs,lval._v._str ); break;
-                }
+                case LVT_NIL     : break;
+                case LVT_INTEGER :
+                    ofs.write( (char*)&lval._v._int,sizeof(lval._v._int) );break;
+                case LVT_NUMBER  :
+                    ofs.write( (char*)&lval._v._num,sizeof(lval._v._num) );break;
+                case LVT_STRING  : write_string( ofs,lval._v._str ); break;
             }
         }
-        ofs << "\n";
     }
 
     ofs.close();
@@ -615,24 +608,63 @@ int lir::save()
 
 int lir::load()
 {
+    static const int max = 256;
     std::ifstream ifs( _path,std::ifstream::in );
-    if ( !ifs.good() ) return -1;
 
-    static const int buff_max = 128;
-
+    int err  = 0;
     int step = 1;
-    char buffer[buff_max];
-    switch ( step )
+    int cur_size   = 0;
+    int cur_header = 0;
+
+    char buffer[max];
+
+    while( ifs.good() && 0 == err )
     {
-        while ( ifs.good() )
+        switch( step )
         {
-    case 1 : 
-    {
-        ifs.get( buffer,buff_max,'\t' );break;
-    }
+        case 1: // 读取排序因子数量
+        {
+            step ++;
+            ifs.read( (char*)&_cur_factor,sizeof(_cur_factor) );
+            if ( _cur_factor < 0 || _cur_factor > MAX_FACTOR ) err = -1;
+        }break;
+        case 2: // 读取头部变量数量
+        {
+            ifs.read( (char*)&cur_header,sizeof(cur_header) );
+
+            if ( cur_header < 0 ) err = -1;
+            step = cur_header > 0 ? step + 1 : step + 2; // 可能数量为0
+        }break;
+        case 3: // 读取头部变量名
+        {
+            size_t sz = read_string( ifs,buffer,max );
+            if ( sz > 0 )
+            {
+                err = add_header( buffer,sz );
+            }
+            else
+            {
+                err = -1;
+            }
+            // 读取完所有才能进行下一步
+            step = _cur_header < cur_header ? step : step + 1;
+        }break;
+        case 4: // 读取元素数量
+        {
+            ifs.read( (char*)&cur_size,sizeof(cur_size) );
+            if ( cur_size < 0 ) err = -1;
+
+            step = cur_size > 0 ? step + 1 : step + 2;
+        }break;
+        case 5: // 读取key
+        {
+            
+        }break;
         }
     }
-    return 0;
+
+    ifs.close();
+    return  err;
 }
 
 /* ====================LUA STATIC FUNCTION======================= */
