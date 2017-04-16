@@ -21,12 +21,20 @@
 
 static const char* error_msg[] = 
 {
-    "success",
-    "no such key found",
-    "value index too large",
-    "value index illegal",
-    "no such header",
-    "dumplicate header name"
+    /* 0  */ "success",
+    /* 1  */ "no such key found",
+    /* 2  */ "value index too large",
+    /* 3  */ "value index illegal",
+    /* 4  */ "no such header",
+    /* 5  */ "dumplicate header name",
+    /* 6  */ "(illegal file)factor error",
+    /* 7  */ "(illegal file)element size error",
+    /* 8  */ "(illegal file)element value size error",
+    /* 9  */ "(illegal file)element value type error",
+    /* 10 */ "(illegal file)element string value error",
+    /* 11 */ "(illegal file)can not update element value",
+    /* 12 */ "end of file",
+    /* 13 */ "ranking list must be empty when load data from file"
 };
 
 static void raise_error( lua_State *L,int err_code )
@@ -451,7 +459,7 @@ int lir::update_one_value( key_t key,int index,const lval_t &lval )
     else if ( element->_vsz <= index )
     {
         int sz = element->_vsz;
-        while ( sz < index ) sz *=2;
+        while ( sz <= index ) sz *=2;
 
         array_resize( lval_t,element->_val,element->_vsz,sz );
     }
@@ -572,67 +580,147 @@ int lir::save()
 }
 
 int lir::load()
-{/*
-    static const int max = 256;
+{
+    enum step
+    {
+        ST_FCNT = 0,  // 读取排序因子数量
+        ST_ECNT    ,  // 读取元素数量
+        ST_EKEY    ,  // element key
+        ST_EFCT    ,  // element factor
+        ST_EVSZ    ,  // element value size
+        ST_EVAL    ,  // element value
+        ST_FCHK    ,  // finish check
+        ST_DONE       // 完成
+    };
+
+    if ( 0 != _cur_size ) return 13;
+
     std::ifstream ifs( _path,std::ifstream::in );
 
-    int err  = 0;
-    int step = 1;
+    int step = ST_FCNT;
     int cur_size   = 0;
-    int cur_header = 0;
 
     key_t key;
-    char buffer[max];
-    element_t element = NULL;
+
+    int cur_factor  = 0;
+    int factor_size = 0;
     factor_t factor[MAX_FACTOR];
 
-    while( ifs.good() && 0 == err )
+    int vsz = 0;
+    int cur_vsz = 0;
+
+    int _errno = 0;
+
+    while( ifs.good() && 0 == _errno )
     {
         switch( step )
         {
-        case 1: // 读取排序因子数量
+        case ST_FCNT: // 读取排序因子数量
         {
             step ++;
-            ifs.read( (char*)&_cur_factor,sizeof(_cur_factor) );
-            if ( _cur_factor < 0 || _cur_factor > MAX_FACTOR ) err = -1;
+            ifs.read( (char*)&cur_factor,sizeof(cur_factor) );
+            if ( cur_factor < 0 || cur_factor > MAX_FACTOR ) _errno = 6;
         }break;
-        case 2: // 读取头部变量数量
-        {
-            ifs.read( (char*)&cur_header,sizeof(cur_header) );
-
-            if ( cur_header < 0 ) err = -1;
-            step = cur_header > 0 ? step + 1 : step + 2; // 可能数量为0
-        }break;
-        case 3: // 读取头部变量名
-        {
-            size_t sz = read_string( ifs,buffer,max );
-            if ( sz > 0 )
-            {
-                err = add_header( buffer,sz );
-            }
-            else
-            {
-                err = -1;
-            }
-            // 读取完所有才能进行下一步
-            step = itr->second->_vsz < cur_header ? step : step + 1;
-        }break;
-        case 4: // 读取元素数量
+        case ST_ECNT: // 读取元素数量
         {
             ifs.read( (char*)&cur_size,sizeof(cur_size) );
-            if ( cur_size < 0 ) err = -1;
+            if ( cur_size < 0 )
+            {
+                _errno = 7;
+                continue  ;
+            }
 
-            step = cur_size > 0 ? step + 1 : step + 2;
+            step = cur_size > 0 ? step + 1 : ST_DONE;
         }break;
-        case 5: // 读取key
+        case ST_EKEY: // 读取key
         {
-            
+            step  ++;
+            factor_size = 0; // reset factor size for current element
+            ifs.read( (char*)&key,sizeof(key) );
         }break;
+        case ST_EFCT: // 读取元素排序因子
+        {
+            ifs.read( (char*)(factor + factor_size),sizeof(factor_t) );
+
+            if ( ++factor_size >= cur_factor ) // 所有排序因子都读取完成
+            {
+                step ++;
+
+                int old_pos = 0;
+                update_factor( key,factor,factor_size,old_pos );
+            }
+        }break;
+        case ST_EVSZ: // 读取元素变量数量
+        {
+            cur_vsz = 0; // reset value size for current element
+            ifs.read( (char*)&vsz,sizeof(vsz) );
+
+            if ( vsz < 0 ) _errno = 8;
+
+            step = vsz > 0 ? ST_EVAL : ST_FCHK;
+        }break;
+        case ST_EVAL: // 读取变量值
+        {
+            lval_t lval;
+            ifs.read( (char*)&lval._vt,sizeof(lval._vt) );
+            if ( !ifs.good() )
+            {
+                _errno = 9;
+                continue  ;
+            }
+
+            switch( lval._vt )
+            {
+                case LVT_UNDEF   :
+                case LVT_NIL     : break;
+                case LVT_BOOLEAN : 
+                case LVT_INTEGER : 
+                    ifs.read( (char*)&lval._v._int,sizeof(lval._v._int) );break;
+                case LVT_NUMBER  :
+                    ifs.read( (char*)&lval._v._num,sizeof(lval._v._num) );break;
+                case LVT_STRING  :
+                {
+                    static const int max = 256;
+                    char buffer[max];
+
+                    int sz = read_string( ifs,buffer,max );
+                    if ( sz < 0 )
+                    {
+                        _errno = 10;
+                        continue   ;
+                    }
+
+                    lval._v._str = new_string( buffer,sz );
+                }break;
+            }
+
+            int err = update_one_value( key,cur_vsz,lval );
+            if ( err )
+            {
+                _errno = 11;
+                continue   ;
+            }
+
+            // 检查当前元素的变量是否读取完成
+            if ( ++cur_vsz >= vsz ) step ++;
+        }break;
+        case ST_FCHK: // 检查是否还有下一个元素
+        {
+            step = _cur_size >= cur_size ? ST_DONE : ST_EKEY;
+        }break;
+        case ST_DONE:
+        {
+            ifs.close();
+            return    0;
+        }break;
+        // end of switch
         }
     }
 
-    ifs.close();*/
-    return  0;
+    if ( !ifs.good() && ST_DONE != step ) _errno = 12;
+
+    ifs.close()  ;
+    return _errno;   
 }
 
 /* ====================LUA STATIC FUNCTION======================= */
@@ -954,9 +1042,10 @@ static int load( lua_State *L )
         return luaL_error( L, "argument #1 expect" LIB_NAME );
     }
 
-    if ( 0 != (*_lir)->load() )
+    int _errno = (*_lir)->load();
+    if ( 0 != _errno )
     {
-        return luaL_error( L,strerror(errno) );
+        raise_error( L,_errno );
     }
 
     return 0;

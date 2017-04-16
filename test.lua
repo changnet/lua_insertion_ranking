@@ -55,6 +55,7 @@ end
 lir:set_value( 7,"test7",30,0.856 )
 lir:set_one_factor( 8,9632.778,5 )
 lir:set_one_value( 5,1,"lir5" )
+lir:set_one_value( 5,19,"lir5" )
 lir:set_one_factor( 1,-8659.669,1 )
 
 lir:save( "test.lir" )
@@ -71,6 +72,10 @@ print( lir:get_key(9) )
 print( lir:get_key(100) )
 print( lir:get_position( 10 ) )
 print( lir:get_position( 99 ) )
+
+-- local lir = Lir( "test.lir" )
+lir:load()
+lir:dump()
 
 -- lir:dump()
 -- lir:load()
