@@ -1,6 +1,7 @@
 #include "linsertion_ranking.hpp"
 
 #include <cmath>
+#include <cerrno>
 #include <cassert>
 
 #include <fstream>      // std::ofstream
@@ -22,7 +23,7 @@ static const char* error_msg[] =
 {
     "success",
     "no such key found",
-    "no such value name found",
+    "value index too large",
     "value index illegal",
     "no such header",
     "dumplicate header name"
@@ -39,13 +40,23 @@ static void raise_error( lua_State *L,int err_code )
     luaL_error( L,"unknow error(%d)",err_code );
 }
 
-/* 将一个lua变量转换为一个lval_t变量 */
+/* 将一个lua变量转换为一个lval_t变量
+ * !!! 不要del_element此函数返回的lval_t
+ */
 static lir::lval_t lua_toelement( lua_State *L,int index )
 {
     lir::lval_t lval;
 
     switch ( lua_type( L,index ) )
     {
+        case LUA_TNIL     :
+        {
+            lval._vt = lir::LVT_NIL;
+        }break;
+        case LUA_TBOOLEAN :
+        {
+            lval._vt = lir::LVT_BOOLEAN;
+        }break;
         case LUA_TNUMBER :
         {
             if ( lua_isinteger( L,index ) )
@@ -63,13 +74,12 @@ static lir::lval_t lua_toelement( lua_State *L,int index )
         {
                 lval._vt = lir::LVT_STRING;
 
-                size_t sz = 0;
-                const char *str = lua_tolstring( L,index,&sz );
-                lval._v._str = lir::new_string( str,sz );
+                // please use this carefully,do not delete string
+                lval._v._str = const_cast<char *>( lua_tostring( L,index ) );
         }break;
         default:
         {
-            lval._vt = lir::LVT_NIL;
+            lval._vt = lir::LVT_UNDEF;
         }break;
     }
 
@@ -81,6 +91,7 @@ static void lua_pushelement( lua_State *L,const lir::lval_t &val )
 {
     switch( val._vt )
     {
+        case lir::LVT_BOOLEAN : lua_pushboolean( L,val._v._int ); break;
         case lir::LVT_INTEGER : lua_pushinteger( L,val._v._int ); break;
         case lir::LVT_NUMBER  : lua_pushnumber ( L,val._v._num ); break;
         case lir::LVT_STRING  : lua_pushstring ( L,val._v._str ); break;
@@ -103,13 +114,6 @@ static void lua_pushintegerornumber( lua_State *L,double v )
 
 lir::~lir()
 {
-    for ( int i = 0;i < _cur_header;i ++ )
-    {
-        if ( *(_header + i) ) del_string( *(_header + i) );
-    }
-
-    delete []_header;
-
     for ( int i = 0;i < _cur_size;i ++ )
     {
         del_element( *(_list + i) );
@@ -128,84 +132,12 @@ lir::lir( const char *path )
     memcpy( _path,path,sz );
 
     _cur_size  = 0;
-    _max_size  = DEFAULT_HEADER;
-    _list = new element_t*[DEFAULT_HEADER];
+    _max_size  = DEFAULT_VALUE;
+    _list = new element_t*[DEFAULT_VALUE];
     memset( _list,0,sizeof(element_t*)*_max_size );
 
     _modify = false;
     _cur_factor = 0;
-
-    _cur_header = 0;
-    _max_header = DEFAULT_HEADER;
-    _header     = new char*[DEFAULT_HEADER];
-
-    memset( _header,0,sizeof(char*)*_max_header );
-}
-
-int lir::add_header( const char *name,size_t sz )
-{
-    /* check dumplicate header name */
-    if ( find_header( name ) > 0 ) return 5;
-
-    int old_size = _max_header;
-    if ( _cur_header >= _max_header )
-    {
-        array_resize( char *,_header,_max_header,_max_header*2 );
-    }
-
-    *(_header + _cur_header) = new_string( name,sz );
-    _cur_header ++;
-
-    // 如果预留的内存不足，重新分配所有元素的内存
-    if ( old_size != _max_header && _cur_size > 0 )
-    {
-        for ( int index = 0;index < _cur_size;index ++ )
-        {
-            element_t *element = *(_list + index);
-            if ( !element->_val )        continue;
-
-            const lval_t*old_val = element->_val;
-            element->_val= new lval_t[_max_header];
-            memset( element->_val,0,sizeof(lval_t)*_max_header ); // 预留
-            memcpy( element->_val,old_val,sizeof(lval_t)*_cur_header );
-
-            delete []old_val;
-        }
-    }
-
-    return 0;
-}
-
-int lir::del_header( const char *name )
-{
-    int index = find_header( name );
-    if ( index < 0 ) return       4;
-
-    _cur_header --;
-    int mov_sz = _cur_header - index;
-
-    // 移动所有元素val数组，保证header
-    for ( int i = 0;i < _cur_size;i ++ )
-    {
-        element_t *element = *(_list + i);
-        if ( !element->_val )    continue;
-
-        del_lval( *(element->_val + index) );
-
-        if ( mov_sz > 0 )
-        {
-            memmove( element->_val + index,
-                element->_val + index + 1,sizeof(lval_t)*mov_sz );
-        }
-    }
-
-    del_string( *(_header + index) );
-    if ( mov_sz > 0 )
-    {
-        memmove( _header + index,_header + index + 1,sizeof(char*)*mov_sz );
-    }
-
-    return 0;
 }
 
 char *lir::new_string( const char *str,size_t sz )
@@ -233,11 +165,46 @@ void lir::del_lval( const lval_t &lval )
     }
 }
 
+void lir::cpy_lval( lval_t &to,const lval_t &from )
+{
+    if ( to._vt == LVT_STRING )
+    {
+        if ( from._vt == LVT_STRING )
+        {
+            size_t sz = strlen(to._v._str);
+            if ( sz >= strlen(from._v._str) )
+            {
+                memcpy( to._v._str,from._v._str,sz );
+                return;
+            }
+            else
+            {
+                del_string( to._v._str );
+                to._v._str = new_string( from._v._str );
+
+                return;
+            }
+        }
+        del_string( to._v._str );
+    }
+
+    to._vt = from._vt;
+
+    if ( from._vt != LVT_STRING )
+    {
+        to._v  = from._v ;
+    }
+    else
+    {
+        to._v._str = new_string( from._v._str );
+    }
+}
+
 void lir::del_element( const element_t *element )
 {
     if ( element->_val )
     {
-        for ( int i = 0;i < _cur_header;i ++ )
+        for ( int i = 0;i < element->_vsz;i ++ )
         {
             del_lval( *(element->_val + i) );
         }
@@ -325,6 +292,7 @@ int lir::append( key_t key,factor_t *factor )
     }
 
     element_t *element = new element_t();
+    element->_vsz = 0   ;
     element->_key = key ;
     element->_val = NULL;
     
@@ -401,13 +369,10 @@ void lir::raw_dump( std::ostream &os )
     os << "position";
     for ( int i = 0;i < _cur_factor;i ++ )
     {
-        os << '\t' << "factor" << i;
+        os << '\t' << "factor" << i + 1;
     }
-    for ( int i = 0;i < _cur_header;i ++ )
-    {
-        os << '\t' << *(_header + i);
-    }
-    os << std::endl;
+
+    os << '\t' << "values ..." << std::endl;
 
     for ( int index = 0;index < _cur_size;index ++ )
     {
@@ -423,18 +388,18 @@ void lir::raw_dump( std::ostream &os )
         }
 
         // print all value
-        if ( e->_val )
+        for ( int hindex = 0;hindex < e->_vsz;hindex ++ )
         {
-            for ( int hindex = 0;hindex < _cur_header;hindex ++ )
+            const lval_t &lval = e->_val[hindex];
+            switch ( lval._vt )
             {
-                const lval_t &lval = e->_val[hindex];
-                switch ( lval._vt )
-                {
-                    case LVT_NIL     : os << '\t' << "nil";break;
-                    case LVT_INTEGER : os << '\t' << lval._v._int;break;
-                    case LVT_NUMBER  : os << '\t' << lval._v._num;break;
-                    case LVT_STRING  : os << '\t' << lval._v._str;break;
-                }
+                case LVT_UNDEF   : os << '\t';break;
+                case LVT_NIL     : os << '\t' << "nil";break;
+                case LVT_BOOLEAN : 
+                    os << "\t" << (lval._v._int ? "true" : "false");break;
+                case LVT_INTEGER : os << '\t' << lval._v._int;break;
+                case LVT_NUMBER  : os << '\t' << lval._v._num;break;
+                case LVT_STRING  : os << '\t' << lval._v._str;break;
             }
         }
 
@@ -460,16 +425,10 @@ void lir::dump( const char *path )
     raw_dump( std::cout );
 }
 
-/* 设置一个变量 */
-int lir::update_one_value( key_t key,const char *name,lval_t &lval )
-{
-    int index = find_header( name );
-    if ( index < 0 )      return 2;
-
-    return update_one_value( key,index,lval );
-}
-
-int lir::update_one_value( key_t key,int index,lval_t &lval )
+/*
+ * !!!! @lval should not need to delete mmemory here
+ */
+int lir::update_one_value( key_t key,int index,const lval_t &lval )
 {
     kmap_iterator itr = _kmap.find( key );
     if ( itr == _kmap.end() )
@@ -477,17 +436,27 @@ int lir::update_one_value( key_t key,int index,lval_t &lval )
         return 1;
     }
 
-    if ( index < 0 || index >= _cur_header ) return 3;
+    if ( index < 0 || index >= MAX_VALUE ) return 3;
 
     element_t *element = itr->second;
     if ( !element->_val )
     {
-        element->_val = new lval_t[_max_header];
-        memset( element->_val,0,sizeof(lval_t)*_max_header ); // 预留
+        int sz = DEFAULT_VALUE;
+        while ( sz < index ) sz *=2;
+
+        element->_vsz = sz;
+        element->_val = new lval_t[sz];
+        memset( element->_val,0,sizeof(lval_t)*sz ); // 预留
+    }
+    else if ( element->_vsz <= index )
+    {
+        int sz = element->_vsz;
+        while ( sz < index ) sz *=2;
+
+        array_resize( lval_t,element->_val,element->_vsz,sz );
     }
 
-    del_lval( *(element->_val + index) );// delete old value memory
-    *(element->_val + index)      = lval;
+    cpy_lval( *(element->_val + index),lval );// delete old value memory
 
     return 0;
 }
@@ -511,7 +480,7 @@ int lir::get_value( key_t key,lval_t **val )
 
     *val = itr->second->_val;
 
-    return _cur_header;
+    return itr->second->_vsz;
 }
 
 // 获取变量
@@ -565,11 +534,6 @@ int lir::save()
 
 
     ofs.write( (char*)&_cur_factor,sizeof(_cur_factor) );
-    ofs.write( (char*)&_cur_header,sizeof(_cur_header) );
-    for ( int i = 0;i < _cur_header;i ++ )
-    {
-        write_string( ofs,*(_header + i) );
-    }
 
     ofs.write( (char*)&_cur_size,sizeof(_cur_size) );
     for ( int i = 0;i < _cur_size;i ++ )
@@ -582,17 +546,18 @@ int lir::save()
             ofs.write( (char*)&(element->_factor[findex]),sizeof(factor_t) );
         }
 
-        int cur_header = NULL == element->_val ? 0 : _cur_header;
-        ofs.write( (char*)&cur_header,sizeof(cur_header) );
+        ofs.write( (char*)&element->_vsz,sizeof(element->_vsz) );
 
-        for ( int vindex = 0;vindex < cur_header;vindex ++ )
+        for ( int vindex = 0;vindex < element->_vsz;vindex ++ )
         {
             const lval_t &lval = element->_val[vindex];
 
             ofs.write( (char*)&lval._vt,sizeof(lval._vt) );
             switch ( lval._vt )
             {
+                case LVT_UNDEF   : // fall through
                 case LVT_NIL     : break;
+                case LVT_BOOLEAN : // fall through
                 case LVT_INTEGER :
                     ofs.write( (char*)&lval._v._int,sizeof(lval._v._int) );break;
                 case LVT_NUMBER  :
@@ -607,7 +572,7 @@ int lir::save()
 }
 
 int lir::load()
-{
+{/*
     static const int max = 256;
     std::ifstream ifs( _path,std::ifstream::in );
 
@@ -650,7 +615,7 @@ int lir::load()
                 err = -1;
             }
             // 读取完所有才能进行下一步
-            step = _cur_header < cur_header ? step : step + 1;
+            step = itr->second->_vsz < cur_header ? step : step + 1;
         }break;
         case 4: // 读取元素数量
         {
@@ -666,8 +631,8 @@ int lir::load()
         }
     }
 
-    ifs.close();
-    return  err;
+    ifs.close();*/
+    return  0;
 }
 
 /* ====================LUA STATIC FUNCTION======================= */
@@ -788,8 +753,9 @@ static int set_value( lua_State *L )
     int top = lua_gettop( L );
     for ( int i = 3;i <= top;i ++ )
     {
-        lir::lval_t lval = lua_toelement( L,i );
-        if ( lir::LVT_NIL == lval._vt )
+        // !!!! this lval DO NOT need to delete and CAN ONT
+        const lir::lval_t lval = lua_toelement( L,i );
+        if ( lir::LVT_UNDEF == lval._vt )
         {
             return luaL_error( L,
                 "unsouport value type %s",lua_typename(L, lua_type(L, i)) );
@@ -813,15 +779,17 @@ static int set_one_value( lua_State *L )
     }
 
     lir::key_t key   = luaL_checkinteger( L,2 );
-    const char *name = luaL_checkstring( L,3 ) ;
-    lir::lval_t lval = lua_toelement( L,4 )    ;
-    if ( lir::LVT_NIL == lval._vt )
+    int index        = luaL_checkinteger( L,3 );
+
+    // !!!! this lval DO NOT need to delete and CAN ONT
+    const lir::lval_t lval = lua_toelement( L,4 );
+    if ( lir::LVT_UNDEF == lval._vt )
     {
         return luaL_error( L,
             "unsouport value type %s",lua_typename(L, lua_type(L, 3)) );
     }
 
-    int err = (*_lir)->update_one_value( key,name,lval );
+    int err = (*_lir)->update_one_value( key,index - 1,lval );
     if ( err )
     {
         raise_error( L,err );
@@ -960,53 +928,6 @@ static int del( lua_State *L )
     return                 1;
 }
 
-/* 增加一个header */
-static int add_header( lua_State *L )
-{
-    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
-    if ( _lir == NULL || *_lir == NULL )
-    {
-        return luaL_error( L, "argument #1 expect" LIB_NAME );
-    }
-
-    size_t sz = 0;
-    const char *name = luaL_checklstring( L,2,&sz );
-    if ( sz <= 0 )
-    {
-        return luaL_error( L,"illegal header name" );
-    }
-
-    int err = (*_lir)->add_header( name,sz );
-    if ( err )
-    {
-        raise_error( L,err );
-        return             0;
-    }
-
-    return 0;
-}
-
-/* 删除一个header */
-static int del_header( lua_State *L )
-{
-    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
-    if ( _lir == NULL || *_lir == NULL )
-    {
-        return luaL_error( L, "argument #1 expect" LIB_NAME );
-    }
-
-    const char *name = luaL_checkstring( L,2 );
-
-    int err = (*_lir)->del_header( name );
-    if ( err )
-    {
-        raise_error( L,err );
-        return             0;
-    }
-
-    return 0;
-}
-
 /* 保存到文件 */
 static int save( lua_State *L )
 {
@@ -1053,31 +974,6 @@ static int __call( lua_State *L )
     }
 
     class lir* obj = new class lir( path );
-
-    bool error = false;
-    int top = lua_gettop( L );
-    for ( int i = 3;i <= top;i ++ )
-    {
-        if ( !lua_isstring( L,i ) )
-        {
-            error = true;
-            break       ;
-        }
-
-        int err = obj->add_header( lua_tostring( L,i ) );
-        if ( err )
-        {
-            delete obj;
-            raise_error( L,err );
-            return             0;
-        }
-    }
-
-    if ( error )
-    {
-        delete obj;
-        return luaL_error( L,"header must be string" );
-    }
 
     lua_settop( L,1 ); /* 清除所有构造函数参数,只保留元表 */
 
@@ -1167,12 +1063,6 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, del);
     lua_setfield(L, -2, "del");
-
-    lua_pushcfunction(L, add_header);
-    lua_setfield(L, -2, "add_header");
-
-    lua_pushcfunction(L, del_header);
-    lua_setfield(L, -2, "del_header");
 
     lua_pushcfunction(L, save);
     lua_setfield(L, -2, "save");

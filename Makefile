@@ -7,8 +7,8 @@ TARGET_SO =         lua_insertion_ranking.so
 TARGET_A  =         liblua_insertion_ranking.a
 
 # -std=c++03 warning: ISO C++ 1998 does not support ‘long long’ [-Wlong-long]
-CFLAGS =            -std=c++0x -g3 -Wall -pedantic -fno-inline
-#CFLAGS =            -std=c++0x -O2 -Wall -pedantic #-DNDEBUG
+CFLAGS =            -g3 -Wall -fno-inline
+#CFLAGS =           -O2 -Wall #-DNDEBUG
 
 SHAREDDIR = .sharedlib
 STATICDIR = .staticlib

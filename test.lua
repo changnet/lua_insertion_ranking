@@ -43,41 +43,35 @@ math.randomseed( os.time() )
 
 local Lir = require "lua_insertion_ranking"
 
-local lir = Lir( "test.lir","name","age","rate" )
+local lir = Lir( "test.lir" )
 lir:dump()
 
--- for key_id = 1,10 do
---     local factor1 = math.random( MIN_RAND,MAX_RAND ) * 0.2356
---     local factor2 = math.random( MIN_RAND,MAX_RAND ) * 0.9846
---     lir:set_factor( key_id,factor1,factor2 );
--- end
+for key_id = 1,10 do
+    local factor1 = math.random( MIN_RAND,MAX_RAND ) * 0.2356
+    local factor2 = math.random( MIN_RAND,MAX_RAND ) * 0.9846
+    lir:set_factor( key_id,factor1,factor2 );
+end
 
--- lir:set_value( 7,"test7",30,0.856 )
--- lir:set_one_factor( 8,9632.778,5 )
--- lir:set_one_value( 5,"name","lir5" )
--- lir:set_one_factor( 1,-8659.669,1 )
+lir:set_value( 7,"test7",30,0.856 )
+lir:set_one_factor( 8,9632.778,5 )
+lir:set_one_value( 5,1,"lir5" )
+lir:set_one_factor( 1,-8659.669,1 )
 
--- lir:save( "test.lir" )
+lir:save( "test.lir" )
 
--- lir:del( 9 )
--- lir:add_header( "job" )
+lir:del( 9 )
 
--- lir:del_header( "age" )
+lir:dump()
+print( lir:get_factor( 7 ) )
+print( lir:get_one_factor( 1,1 ) )
+print( lir:get_value( 5 ) )
 
--- lir:dump()
--- print( lir:get_factor( 7 ) )
--- print( lir:get_one_factor( 1,1 ) )
--- print( lir:get_value( 5 ) )
+print( lir:size() )
+print( lir:get_key(9) )
+print( lir:get_key(100) )
+print( lir:get_position( 10 ) )
+print( lir:get_position( 99 ) )
 
--- print( lir:size() )
--- print( lir:get_key(9) )
--- print( lir:get_key(100) )
--- print( lir:get_position( 10 ) )
--- print( lir:get_position( 99 ) )
-
--- lir:del_header( "name" )
--- lir:del_header( "job" )
--- lir:del_header( "rate" )
 -- lir:dump()
 -- lir:load()
 -- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",

@@ -26,9 +26,9 @@ public:
 
     const static int DEFAULT_SIZE = 32; // 默认分配排行数组大小
 
-    // 默认变量名头部分配大小
-    // 比如排行榜中包含玩家的名字，那一列叫"name"，那这个name就称头部
-    const static int DEFAULT_HEADER = 8;
+    // 默认变量分配大小
+    const static int MAX_VALUE = 256;
+    const static int DEFAULT_VALUE = 8;
 
     typedef double factor_t  ; // 排序因子类型
     typedef LUA_INTEGER key_t; // key类型，如玩家pid.LUA_INTEGER = int64_t lua5.3
@@ -36,9 +36,11 @@ public:
     // lua中传入的值类型
     typedef enum
     {
-        LVT_NIL = 0, // nil类型必须为0，因为我们用memeset来初始化一个element_t
-        LVT_INTEGER,
-        LVT_NUMBER ,
+        LVT_UNDEF = 0,// undefine类型必须为0，因为我们用memeset来初始化一个element_t
+        LVT_NIL      , 
+        LVT_BOOLEAN  ,
+        LVT_INTEGER  ,
+        LVT_NUMBER   ,
         LVT_STRING
     }lvt_t;
 
@@ -58,6 +60,7 @@ public:
     typedef struct
     {
         int      _pos;
+        int      _vsz;
         key_t    _key;
         lval_t  *_val; // it is a array,size is _header_size
         factor_t _factor[MAX_FACTOR];
@@ -72,11 +75,6 @@ public:
     // 打印排行榜到std::cout或者文件
     void dump( const char *path );
 
-    // 删除一个变量头部
-    int del_header( const char *name );
-
-    // 增加一个变量头部
-    int add_header( const char *name,size_t sz = 0 );
     // 更新排序因子，不存在则尝试插入
     int update_factor( key_t key,factor_t *factor,int factor_cnt,int &old_pos );
     // 更新单个排序因子
@@ -86,8 +84,7 @@ public:
     inline int size() { return _cur_size; }
 
     // 设置一个变量
-    int update_one_value( key_t key,int index,lval_t &lval );
-    int update_one_value( key_t key,const char *name,lval_t &lval );
+    int update_one_value( key_t key,int index,const lval_t &lval );
 
     // 获取排序因子
     int get_factor( key_t key,factor_t **factor );
@@ -115,6 +112,7 @@ public:
 private:
     void del_lval( const lval_t &lval );
     void del_element( const element_t *element );
+    void cpy_lval( lval_t &to,const lval_t &from );
 
     int shift_up  ( element_t *element );
     int shift_down( element_t *element );
@@ -129,17 +127,6 @@ private:
 
     void raw_dump( std::ostream &os );
 
-    /* 查找对应header的索引 */
-    int find_header( const char *name )
-    {
-        for ( int i = 0;i < _cur_header;i ++ )
-        {
-            if ( 0 == strcmp( name,*(_header + i) ) ) return i;
-        }
-
-        return -1;
-    }
-
     // 写入字符串(长度加字符串内容)
     std::ostream &write_string( std::ostream &os,const char *str )
     {
@@ -150,16 +137,16 @@ private:
         return          os;
     }
     // 读取字符串
-    size_t read_string( std::istream &is,char *buffer,int max )
+    int read_string( std::istream &is,char *buffer,int max )
     {
         size_t sz = 0;
         is.read( (char*)&sz,sizeof(sz) );
 
-        if ( !is.good() || sz < 0 || sz > max - 1 ) return -1;
+        if ( !is.good() || sz > size_t(max - 1) ) return -1;
 
         is.read( buffer,sz );
         buffer[sz] = '\0';
-        return is.gcount() == sz ? sz : -1;
+        return is.gcount() == (int)sz ? (int)sz : -1;
     }
 private:
     bool _modify; // 是否变更
@@ -172,10 +159,6 @@ private:
     element_t **_list; // 排行数组
 
     kmap_t _kmap;  // 以排行key则k-v映射，方便用key直接取排名
-
-    char **_header ; // 变量名头部
-    int _cur_header; // 当前头部数量
-    int _max_header; // 最大部数量
 
     // LUA_NUMBER
     // LUA_INTEGER
