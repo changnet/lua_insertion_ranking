@@ -19,7 +19,7 @@ Installation
 
 or embed to your project
 
-valgrind -v --leak-check=full --show-leak-kinds=all lua test.lua
+valgrind -v --leak-check=full --show-leak-kinds=all --track-origins=yes lua test.lua
 
 Api
 -----

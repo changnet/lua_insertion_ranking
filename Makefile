@@ -10,8 +10,8 @@ ifneq ($(STD),)
 	_STD := -std=$(STD)
 endif
 
-CFLAGS =           $(_STD) -g3 -Wall -fno-inline
-#CFLAGS =          $(_STD) -O2 -Wall #-DNDEBUG
+#CFLAGS =           $(_STD) -g3 -Wall -fno-inline
+CFLAGS =          $(_STD) -O2 -Wall #-DNDEBUG
 
 SHAREDDIR = .sharedlib
 STATICDIR = .staticlib

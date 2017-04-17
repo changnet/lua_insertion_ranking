@@ -64,6 +64,7 @@ static lir::lval_t lua_toelement( lua_State *L,int index )
         case LUA_TBOOLEAN :
         {
             lval._vt = lir::LVT_BOOLEAN;
+            lval._v._int = lua_toboolean( L,index );
         }break;
         case LUA_TNUMBER :
         {
