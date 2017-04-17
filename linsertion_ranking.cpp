@@ -128,6 +128,9 @@ lir::~lir()
     }
 
     delete []_list;
+    _list = NULL;
+
+    _kmap.clear();
 }
 
 lir::lir( const char *path )
@@ -294,7 +297,8 @@ int lir::shift_down( element_t *element )
 /* 添加新元素到排行 */
 int lir::append( key_t key,factor_t *factor )
 {
-    if ( _cur_size >= _max_size )
+    assert( _cur_size <= _max_size );
+    if ( _cur_size == _max_size )
     {
         array_resize( element_t*,_list,_max_size,_max_size*2 );
     }
@@ -307,10 +311,10 @@ int lir::append( key_t key,factor_t *factor )
     /* factor必须按MAX_FACTOR初始化。必须全部拷贝，以初始化element._factor */
     memcpy( element->_factor,factor,sizeof( element->_factor ) );
 
-    _cur_size++;
     _kmap[key]           = element;
     *(_list + _cur_size) = element;
 
+    _cur_size++;
     element->_pos = _cur_size;
 
     return shift_up( element );
@@ -690,7 +694,7 @@ int lir::load()
                         continue   ;
                     }
 
-                    lval._v._str = new_string( buffer,sz );
+                    lval._v._str = buffer;//not new_string( buffer,sz );
                 }break;
             }
 

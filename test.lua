@@ -42,7 +42,7 @@ local MAX_RAND = 2000
 math.randomseed( os.time() )
 
 local Lir = require "lua_insertion_ranking"
-
+--[[
 local lir = Lir( "test.lir" )
 lir:dump()
 
@@ -72,10 +72,10 @@ print( lir:get_key(9) )
 print( lir:get_key(100) )
 print( lir:get_position( 10 ) )
 print( lir:get_position( 99 ) )
-
--- local lir = Lir( "test.lir" )
+]]
+local lir = Lir( "test.lir" )
 lir:load()
-lir:dump()
+-- lir:dump()
 
 -- lir:dump()
 -- lir:load()
