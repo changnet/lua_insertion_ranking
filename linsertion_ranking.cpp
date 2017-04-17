@@ -901,9 +901,33 @@ static int get_factor( lua_State *L )
 
     lir::key_t key   = luaL_checkinteger( L,2 );
 
+    int index = 0;
+    if ( !lua_isnoneornil( L,3 ) )
+    {
+        index = luaL_checkinteger  ( L,3 );
+        if ( index <= 0 || index > lir::MAX_VALUE )
+        {
+            return luaL_error( L, "argument #3 illegal" );
+        }
+    }
+
     lir::factor_t *factor = NULL;
     int factor_cnt = (*_lir)->get_factor( key,&factor );
     assert( factor_cnt >= 0 && factor_cnt <= lir::MAX_FACTOR );
+
+    // get one factor
+    if ( index > 0 )
+    {
+        if ( index >= factor_cnt ) return 0;
+
+        lua_pushintegerornumber( L,*(factor + index - 1) );
+        return 1;
+    }
+
+    if ( !lua_checkstack( L,factor_cnt ) )
+    {
+        return luaL_error( L,"stack overflow" );
+    }
 
     for ( int i = 0;i < factor_cnt;i ++ )
     {
@@ -913,35 +937,7 @@ static int get_factor( lua_State *L )
     return factor_cnt;
 }
 
-/* 获取单个排序因子 */
-static int get_one_factor( lua_State *L )
-{
-    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
-    if ( _lir == NULL || *_lir == NULL )
-    {
-        return luaL_error( L, "argument #1 expect" LIB_NAME );
-    }
-
-    lir::key_t key = luaL_checkinteger( L,2 );
-    int index      = luaL_checkinteger( L,3 );
-
-    if ( index <= 0 || index > lir::MAX_FACTOR )
-    {
-        return luaL_error( L, "argument #2 illegal" );
-    }
-
-    lir::factor_t *factor = NULL;
-    int factor_cnt = (*_lir)->get_factor( key,&factor );
-    assert( factor_cnt >= 0 && factor_cnt <= lir::MAX_FACTOR );
-
-    if ( index > factor_cnt ) return 0;
-
-    lua_pushintegerornumber( L,*(factor + index - 1) );
-
-    return 1;
-}
-
-/* 获取排序因子 */
+/* 获取排序变量 */
 static int get_value( lua_State *L )
 {
     class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
@@ -952,10 +948,35 @@ static int get_value( lua_State *L )
 
     lir::key_t key   = luaL_checkinteger( L,2 );
 
+    int index = 0;
+    if ( !lua_isnoneornil( L,3 ) )
+    {
+        index = luaL_checkinteger  ( L,3 );
+        if ( index <= 0 || index > lir::MAX_VALUE )
+        {
+            return luaL_error( L, "argument #3 illegal" );
+        }
+    }
+
     lir::lval_t *val = NULL;
     int val_cnt = (*_lir)->get_value( key,&val );
     assert( val_cnt >= 0 );
 
+    // get one element
+    if ( index > 0 )
+    {
+        if ( index >= val_cnt ) return 0;
+
+        lua_pushelement( L,*(val + index - 1) );
+        return 1;
+    }
+
+    if ( !lua_checkstack( L,val_cnt ) )
+    {
+        return luaL_error( L,"stack overflow" );
+    }
+
+    // get all element
     for ( int i = 0;i < val_cnt;i ++ )
     {
         lua_pushelement( L,*(val + i) );
@@ -1141,9 +1162,6 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, get_factor);
     lua_setfield(L, -2, "get_factor");
-
-    lua_pushcfunction(L, get_one_factor);
-    lua_setfield(L, -2, "get_one_factor");
 
     lua_pushcfunction(L, get_value);
     lua_setfield(L, -2, "get_value");

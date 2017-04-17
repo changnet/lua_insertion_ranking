@@ -116,37 +116,42 @@ lir:dump( "test.dmp" )
 
 lir:save( "test.lir" )
 
+print( lir:size() )
+
+for i = 1,math.floor(MAX_EMET/3) do
+    local key_id = math.random( 1,MAX_EMET )
+    print( lir:get_factor( key_id ) )
+    print( lir:get_value( key_id ) )
+
+    local f_index = math.random( 1,MAX_FCNT )
+    print( lir:get_factor( key_id,f_index ) )
+
+    local v_index = math.random( 1,MAX_VIDX )
+    print( lir:get_value ( key_id,v_index) )
+
+
+    print( lir:get_key( i ) )
+    print( lir:get_position( key_id ) )
+end
+
 local llir = Lir( "test.lir" )
 llir:load()
-lir:dump( "test.dmp" )
+llir:dump( "test.dmp" )
 
---[[
-lir:set_value( 7,"test7",30,0.856 )
-lir:set_one_factor( 8,9632.778,4 )
-lir:set_one_value( 5,1,"lir5" )
-lir:set_one_value( 5,19,"lir5" )
-lir:set_one_factor( 1,-8659.669,1 )
+local MAX_TS = 100000
+local lb = Lir( "benchmark.lir" )
+local sx = os.clock()
 
-lir:save( "test.lir" )
+for i = 1,MAX_TS do
+    local key_id  = math.random( 1,MAX_EMET )
+    local f_index = math.random( 1,MAX_FCNT )
+    local factor = math.random( MIN_RAND,MAX_RAND ) * 1.9846
 
-lir:del( 9 )
+    lb:set_one_factor( key_id,factor,f_index )
+end
 
-lir:dump()
-print( lir:get_factor( 7 ) )
-print( lir:get_one_factor( 1,1 ) )
-print( lir:get_value( 5 ) )
+local sy = os.clock()
 
-print( lir:size() )
-print( lir:get_key(9) )
-print( lir:get_key(100) )
-print( lir:get_position( 10 ) )
-print( lir:get_position( 99 ) )
 
-local lir = Lir( "test.lir" )
-lir:load()
-lir:dump()]]
-
--- lir:dump()
--- lir:load()
--- print( string.format("simple benchmark test %d times,encode elapsed time: %.2f second,decode elapsed time: %.2f second",
---      max,sy - sx,ey - ex))
+print( string.format("simple benchmark test %d times elapsed time: %.2f second",
+     MAX_TS,sy - sx))
