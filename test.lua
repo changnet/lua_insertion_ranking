@@ -114,7 +114,9 @@ end
 lir:dump()
 lir:dump( "test.dmp" )
 
-lir:save( "test.lir" )
+assert( true == lir:save() )
+assert( false == lir:save() )
+assert( true == lir:save( true ) )
 
 print( lir:size() )
 

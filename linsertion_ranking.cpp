@@ -324,6 +324,8 @@ int lir::append( key_t key,factor_t *factor )
 /* 更新排序因子，不存在则尝试插入 */
 int lir::update_factor( key_t key,factor_t *factor,int factor_cnt,int &old_pos )
 {
+    _modify = true;
+
     // 自动更新全局最大排序因子(必须在compare、memcpy之前更新)
     if ( factor_cnt > _cur_factor ) _cur_factor = factor_cnt;
 
@@ -349,6 +351,8 @@ int lir::update_factor( key_t key,factor_t *factor,int factor_cnt,int &old_pos )
 /* 更新单个排序因子，不存在则尝试插入 */
 int lir::update_one_factor( key_t key,factor_t factor,int index,int &old_pos )
 {
+    _modify = true;
+
     // 自动更新全局最大排序因子(必须在compare、memcpy之前更新)
     if ( index > _cur_factor ) _cur_factor = index;
 
@@ -443,6 +447,8 @@ void lir::dump( const char *path )
  */
 int lir::update_one_value( key_t key,int index,const lval_t &lval )
 {
+    _modify = true;
+
     kmap_iterator itr = _kmap.find( key );
     if ( itr == _kmap.end() )
     {
@@ -516,6 +522,8 @@ int lir::get_position( const key_t &key )
 // 删除一个元素
 int lir::del( const key_t &key )
 {
+    _modify = true;
+
     kmap_iterator itr = _kmap.find( key );
     if ( itr == _kmap.end() )
     {
@@ -540,11 +548,13 @@ int lir::del( const key_t &key )
 }
 
 // 保存到文件
-int lir::save()
+// @f 是否强制保存文件(force)
+int lir::save( int f )
 {
+    if ( !f && !_modify ) return 0; // no need to save
+
     std::ofstream ofs( _path,std::ofstream::trunc | std::ofstream::binary );
     if ( !ofs.good() ) return -1;
-
 
     ofs.write( (char*)&_cur_factor,sizeof(_cur_factor) );
 
@@ -580,8 +590,10 @@ int lir::save()
         }
     }
 
+    _modify = false;
+
     ofs.close();
-    return    0;
+    return    1;
 }
 
 int lir::load()
@@ -1051,12 +1063,18 @@ static int save( lua_State *L )
         return luaL_error( L, "argument #1 expect" LIB_NAME );
     }
 
-    if ( 0 != (*_lir)->save() )
+    int f = lua_toboolean( L,2 );
+
+    int s = (*_lir)->save( f );
+    if ( s < 0  )
     {
         return luaL_error( L,strerror(errno) );
     }
 
-    return 0;
+    // return is file acturely save
+    lua_pushboolean( L,s );
+
+    return 1;
 }
 
 /* 保存到文件 */
@@ -1075,6 +1093,20 @@ static int load( lua_State *L )
     }
 
     return 0;
+}
+
+/* 排行榜是有变化 */
+static int modify( lua_State *L )
+{
+    class lir** _lir = (class lir**)luaL_checkudata( L, 1, LIB_NAME );
+    if ( _lir == NULL || *_lir == NULL )
+    {
+        return luaL_error( L, "argument #1 expect" LIB_NAME );
+    }
+
+    lua_pushboolean( L,(*_lir)->is_modify() );
+
+    return 1;
 }
 
 /* create a C++ object and push to lua stack */
@@ -1181,6 +1213,9 @@ int luaopen_lua_insertion_ranking( lua_State *L )
 
     lua_pushcfunction(L, load);
     lua_setfield(L, -2, "load");
+
+    lua_pushcfunction(L, modify);
+    lua_setfield(L, -2, "modify");
 
     /* metatable as value and pop metatable */
     lua_pushvalue( L,-1 );

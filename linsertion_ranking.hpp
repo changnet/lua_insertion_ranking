@@ -102,10 +102,13 @@ public:
     int del( const key_t &key );
 
     // 保存到文件
-    int save();
+    int save( int f );
 
     // 从文件加载数据
     int load();
+
+    // 文件是否改变(以上次保存文件为准)
+    int is_modify() { return _modify; }
 
     static void  del_string( const char *str );
     static char *new_string( const char *str,size_t sz = 0 );
