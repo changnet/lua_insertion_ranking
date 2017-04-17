@@ -37,23 +37,92 @@ function vd(data, max_level)
     var_dump(data, max_level or 20)
 end
 
-local MIN_RAND = 0
-local MAX_RAND = 2000
-math.randomseed( os.time() )
+local boolean = true
+local str     = "abcdefghijklmnopqrstuvwxyz0123456789./*-+~!@#$%^&*()_+ABCEDFAZUZ"
 
-local Lir = require "lua_insertion_ranking"
---[[
-local lir = Lir( "test.lir" )
-lir:dump()
+local max_strlen = string.len( str )
+function random_value()
+    local srand = math.random( 1,4 )
+    if 1 == srand then -- nil
+        return nil
+    elseif 2 == srand then -- boolean
+        if boolean then
+            boolean = false
+            return     true
+        end
 
-for key_id = 1,10 do
-    local factor1 = math.random( MIN_RAND,MAX_RAND ) * 0.2356
-    local factor2 = math.random( MIN_RAND,MAX_RAND ) * 0.9846
-    lir:set_factor( key_id,factor1,factor2 );
+        boolean = true
+        return   false
+    elseif 3 == srand then -- integer
+        return math.random( 1,8888888 )
+    elseif 4 == srand then -- number
+        return math.random( 1,10000000 )*0.98735
+    else  -- string
+        local len = math.random( 0,max_strlen )
+        if 0 == len then return "" end
+
+        return string.sub( str,len )
+    end
+
+    return nil
 end
 
+local MAX_FCNT = 4
+local MIN_RAND = 0
+local MAX_RAND = 20000
+local MAX_EMET = 400
+local MAX_VIDX = 256
+math.randomseed( os.time() )
+
+
+local Lir = require "lua_insertion_ranking"
+
+local lir = Lir( "test.lir" )
+
+local factor_tbl = {}
+for key_id = 1,MAX_EMET do
+    for index = 1,MAX_FCNT do
+        local factor = math.random( MIN_RAND,MAX_RAND ) * 0.9846
+        factor_tbl[index] = factor
+    end
+    lir:set_factor( key_id,table.unpack(factor_tbl) );
+    lir:set_value ( key_id,nil,true,123456,987654.123,"test string" )
+end
+
+for i = 1,MAX_EMET/2 do
+    local key_id  = math.random( 1,MAX_EMET )
+    local v_index = math.random( 1,MAX_VIDX )
+    local value   = random_value()
+
+    lir:set_one_value( key_id,v_index,value )
+end
+
+for i = 1,math.floor(MAX_EMET/2) do
+    local key_id  = math.random( 1,MAX_EMET )
+    local f_index = math.random( 1,MAX_FCNT )
+    local factor = math.random( MIN_RAND,MAX_RAND ) * 1.9846
+
+    lir:set_one_factor( key_id,factor,f_index )
+end
+
+for i = 1,math.floor(MAX_EMET/3) do
+    local key_id  = math.random( 1,MAX_EMET )
+
+    lir:del( key_id )
+end
+
+lir:dump()
+lir:dump( "test.dmp" )
+
+lir:save( "test.lir" )
+
+local llir = Lir( "test.lir" )
+llir:load()
+lir:dump( "test.dmp" )
+
+--[[
 lir:set_value( 7,"test7",30,0.856 )
-lir:set_one_factor( 8,9632.778,5 )
+lir:set_one_factor( 8,9632.778,4 )
 lir:set_one_value( 5,1,"lir5" )
 lir:set_one_value( 5,19,"lir5" )
 lir:set_one_factor( 1,-8659.669,1 )
@@ -72,10 +141,10 @@ print( lir:get_key(9) )
 print( lir:get_key(100) )
 print( lir:get_position( 10 ) )
 print( lir:get_position( 99 ) )
-]]
+
 local lir = Lir( "test.lir" )
 lir:load()
--- lir:dump()
+lir:dump()]]
 
 -- lir:dump()
 -- lir:load()

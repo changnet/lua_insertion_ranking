@@ -1,14 +1,17 @@
 ##### Build defaults #####
 CMAKE = cmake
-MAKE = make
-CXX = g++
+MAKE  = make
+CXX   = g++
 
 TARGET_SO =         lua_insertion_ranking.so
 TARGET_A  =         liblua_insertion_ranking.a
 
-# -std=c++03 warning: ISO C++ 1998 does not support ‘long long’ [-Wlong-long]
-CFLAGS =            -g3 -Wall -fno-inline
-#CFLAGS =           -O2 -Wall #-DNDEBUG
+ifneq ($(STD),)
+	_STD := -std=$(STD)
+endif
+
+#CFLAGS =           $(_STD) -g3 -Wall -fno-inline
+CFLAGS =          $(_STD) -O2 -Wall #-DNDEBUG
 
 SHAREDDIR = .sharedlib
 STATICDIR = .staticlib

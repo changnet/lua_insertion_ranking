@@ -19,6 +19,8 @@ Installation
 
 or embed to your project
 
+valgrind -v --leak-check=full --show-leak-kinds=all lua test.lua
+
 Api
 -----
 
@@ -92,6 +94,7 @@ local modify = lir:modify()
 -- debug purpose only
 lir:dump( file )
 ```
+
 Example & Benchmark
 -------
 

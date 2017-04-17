@@ -21,7 +21,7 @@ extern int luaopen_lua_insertion_ranking( lua_State *L );
 class lir
 {
 public:
-    const static int MAX_FACTOR = 5;  // 最大排序因子数量
+    const static int MAX_FACTOR = 4;  // 最大排序因子数量
     const static int MAX_PATH   = 64; // 保存文件名路径长度
 
     const static int DEFAULT_SIZE = 32; // 默认分配排行数组大小
