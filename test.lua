@@ -94,7 +94,7 @@ for i = 1,MAX_EMET/2 do
     local v_index = math.random( 1,MAX_VIDX )
     local value   = random_value()
 
-    lir:set_one_value( key_id,v_index,value )
+    lir:set_one_value( key_id,value,v_index )
 end
 
 for i = 1,math.floor(MAX_EMET/2) do
@@ -137,7 +137,9 @@ for i = 1,math.floor(MAX_EMET/3) do
 end
 
 local llir = Lir( "test.lir" )
-llir:load()
+
+print( "load from file",llir:load() )
+print( "is any modify",llir:modify() )
 llir:dump( "test.dmp" )
 
 local MAX_TS = 100000

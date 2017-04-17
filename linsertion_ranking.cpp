@@ -613,6 +613,10 @@ int lir::load()
     if ( 0 != _cur_size ) return 13;
 
     std::ifstream ifs( _path,std::ifstream::in );
+    if ( !ifs.good() || ifs.peek() == std::ifstream::traits_type::eof() )
+    {
+        return 0;
+    }
 
     int step = ST_FCNT;
     int cur_size   = 0;
@@ -884,15 +888,15 @@ static int set_one_value( lua_State *L )
     }
 
     lir::key_t key   = luaL_checkinteger( L,2 );
-    int index        = luaL_checkinteger( L,3 );
 
     // !!!! this lval DO NOT need to delete and CAN ONT
-    const lir::lval_t lval = lua_toelement( L,4 );
+    const lir::lval_t lval = lua_toelement( L,3 );
     if ( lir::LVT_UNDEF == lval._vt )
     {
         return luaL_error( L,
             "unsouport value type %s",lua_typename(L, lua_type(L, 3)) );
     }
+    int index        = luaL_checkinteger( L,4 );
 
     int err = (*_lir)->update_one_value( key,index - 1,lval );
     if ( err )
@@ -1092,7 +1096,9 @@ static int load( lua_State *L )
         raise_error( L,_errno );
     }
 
-    return 0;
+    lua_pushinteger( L,(*_lir)->size() );
+
+    return 1;
 }
 
 /* 排行榜是有变化 */
